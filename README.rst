@@ -1,8 +1,8 @@
 This is is the **quality_control** pipeline from the `Sequana <https://sequana.readthedocs.org>`_ projet
 
-:Overview: TODO 
-:Input: TODO
-:Output: TODO
+:Overview: A quality control pipeline for illumina data set. This pipeline removes contaminants (e.g. Phix), performs fastqc, adapter cleaning and trimming and checks for contaminants
+:Input: Raw fastq files
+:Output: Cleaned fastQ files + taxonomy
 :Status: draft
 :Citation: Cokelaer et al, (2017), ‘Sequana’: a Set of Snakemake NGS pipelines, Journal of Open Source Software, 2(16), 352, JOSS DOI doi:10.21105/joss.00352
 
@@ -45,7 +45,14 @@ Requirements
 
 This pipelines requires the following executable(s):
 
-- TODO
+- fastqc
+- bwa
+- kraken (optional)
+- krona (optional)
+- sambamba
+- samtools
+- pigz
+- cutadapt [or atropos]
 
 .. image:: https://raw.githubusercontent.com/sequana/sequana_quality_control/master/sequana_pipelines/quality_control/dag.png
 

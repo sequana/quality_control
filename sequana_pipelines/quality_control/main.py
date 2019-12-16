@@ -53,9 +53,11 @@ class Options(argparse.ArgumentParser):
         so.add_options(self)
 
         pipeline_group = self.add_argument_group("pipeline")
+        pipeline_group.add_argument("-skip-phix-removal", action="store_true")
 
-        pipeline_group.add_argument("--TODO", dest="TODO", default=4, type=int)
-        
+        so = CutadaptOptions() 
+        so.add_options(self)
+
 
 def main(args=None):
 
@@ -71,9 +73,19 @@ def main(args=None):
 
     # fill the config file with input parameters
     cfg = manager.config.config
-    # EXAMPLE TOREPLACE WITH YOUR NEEDS
-    cfg.TODO = os.path.abspath(options.working_directory)
-    cfg.YOURSECTION.TODO = options.TODO
+
+    cfg.input_directory = os.path.abspath(options.input_directory)
+    cfg.input_pattern = options.input_pattern
+    cfg.input_readtag = options.input_readtag
+
+
+    cfg.cutadapt.do = not options.skip_cutadapt
+    cfg.cutadapt.fwd = options.cutadapt_fwd
+    cfg.cutadapt.rev = options.cutadapt_rev
+    cfg.cutadapt.quality = options.cutadapt_quality
+    cfg.cutadapt.tool_choice = options.cutadapt_tool_choice
+
+    cfg.bwa_mem_phix.do = options.skip_phix_removal
 
     # finalise the command and save it; copy the snakemake. update the config
     # file and save it.
@@ -82,3 +94,4 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
+

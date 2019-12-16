@@ -14,12 +14,14 @@ metainfo = {
     'version': version,
     'license' : 'new BSD',
     'url' : "https://github.com/sequana/",
-    'description': "" ,
+    'description': """A quality control pipeline for illumina data set. This
+pipeline removes contaminants (e.g. Phix), performs fastqc, adapter cleaning and
+trimming and checks for contaminants""" ,
     'platforms' : ['Linux', 'Unix', 'MacOsX', 'Windows'],
     'keywords' : ['snakemake, NGS, sequana, denovo, assembly, short read'],
     'classifiers' : [
-          'Development Status :: 4 - Beta',
-          #'Development Status :: 5 - Production/Stable',
+          #'Development Status :: 4 - Beta',
+          'Development Status :: 5 - Production/Stable',
           'Intended Audience :: Education',
           'Intended Audience :: End Users/Desktop',
           'Intended Audience :: Developers',
