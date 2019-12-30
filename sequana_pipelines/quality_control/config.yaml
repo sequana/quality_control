@@ -7,7 +7,6 @@
 # use it, otherwise use input_samples.
 # ============================================================================
 
-
 input_directory: "%(input_directory)s"
 input_readtag: "%(input_readtag)s"
 input_pattern: "%(input_pattern)s"
@@ -33,7 +32,6 @@ requirements:
 # - index_algorithm: the BWA index algorithm
 # - options: any options recognised by BWA tool
 # - threads: number of threads to be used
-#
 bwa_mem_phix:
     do: yes
     reference_file: "phiX174.fa"
