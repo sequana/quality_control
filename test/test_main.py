@@ -7,11 +7,14 @@ from sequana.pipelines_common import get_pipeline_location as getpath
 
 sharedir = getpath('quality_control')
 
+# The data set provided was using the index GTGAAA
+# this is coming from a kit illumina:wq
+
 
 def test_standalone_subprocess():
     directory = tempfile.TemporaryDirectory()
     cmd = """sequana_pipelines_quality_control --input-directory {}
---working-directory --force""".format(sharedir, directory.name)
+          --working-directory --force""".format(sharedir, directory.name)
     subprocess.call(cmd.split())
 
 

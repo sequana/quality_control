@@ -1,9 +1,9 @@
-This is is the **quality_control** pipeline from the `Sequana <https://sequana.readthedocs.org>`_ projet
+This is is the **quality_control** pipeline from the `Sequana <https://sequana.readthedocs.org>`_ project
 
 :Overview: A quality control pipeline for illumina data set. This pipeline removes contaminants (e.g. Phix), performs fastqc, adapter cleaning and trimming and checks for contaminants
 :Input: Raw fastq files
 :Output: Cleaned fastQ files + taxonomy
-:Status: draft
+:Status: production but meant to be simplified/changed in the near future (2020).
 :Citation: Cokelaer et al, (2017), ‘Sequana’: a Set of Snakemake NGS pipelines, Journal of Open Source Software, 2(16), 352, JOSS DOI doi:10.21105/joss.00352
 
 
@@ -58,7 +58,7 @@ This pipelines requires the following executable(s):
 
 
 Details
-~~~~~~~~~
+~~~~~~~
 
 This pipeline runs **quality_control** in parallel on the input fastq files (paired or not). 
 A brief sequana summary report is also produced.
@@ -70,3 +70,8 @@ Rules and configuration details
 Here is the `latest documented configuration file <https://raw.githubusercontent.com/sequana/sequana_quality_control/master/sequana_pipelines/quality_control/config.yaml>`_
 to be used with the pipeline. Each rule used in the pipeline may have a section in the configuration file. 
 
+ChangeLog
+~~~~~~~~~
+
+
+0.8.1: uses more sequana tools to handle the options
