@@ -55,7 +55,7 @@ class Options(argparse.ArgumentParser):
         pipeline_group = self.add_argument_group("pipeline")
         pipeline_group.add_argument("-skip-phix-removal", action="store_true")
 
-        so = CutadaptOptions() 
+        so = CutadaptOptions()
         so.add_options(self)
 
 
@@ -74,17 +74,17 @@ def main(args=None):
     # fill the config file with input parameters
     cfg = manager.config.config
 
+    # --------------------------------------------------- input  section
     cfg.input_directory = os.path.abspath(options.input_directory)
     cfg.input_pattern = options.input_pattern
     cfg.input_readtag = options.input_readtag
 
-
+    # --------------------------------------------------- cutadapt section
     cfg.cutadapt.do = not options.skip_cutadapt
-    cfg.cutadapt.fwd = options.cutadapt_fwd
-    cfg.cutadapt.rev = options.cutadapt_rev
-    cfg.cutadapt.quality = options.cutadapt_quality
-    cfg.cutadapt.tool_choice = options.cutadapt_tool_choice
+    CutadaptOptions().check_options(options)
+    manager.update_config(cfg, options, "cutadapt")
 
+    # -------------------------------------------------- bwa section
     cfg.bwa_mem_phix.do = options.skip_phix_removal
 
     # finalise the command and save it; copy the snakemake. update the config
