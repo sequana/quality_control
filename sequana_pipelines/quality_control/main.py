@@ -26,11 +26,11 @@ class Options(argparse.ArgumentParser):
 
             For a local run, use :
 
-                sequana_pipelines_quality_control --input-directory PATH_TO_DATA 
+                sequana_pipelines_quality_control --input-directory PATH_TO_DATA
 
             For a run on a SLURM cluster:
 
-                sequana_pipelines_quality_control --input-directory PATH_TO_DATA 
+                sequana_pipelines_quality_control --input-directory PATH_TO_DATA
 
         """
         )
@@ -53,7 +53,7 @@ class Options(argparse.ArgumentParser):
         so.add_options(self)
 
         pipeline_group = self.add_argument_group("pipeline")
-        pipeline_group.add_argument("-skip-phix-removal", action="store_true")
+        pipeline_group.add_argument("--skip-phix-removal", action="store_true")
 
         so = CutadaptOptions()
         so.add_options(self)
