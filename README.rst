@@ -74,5 +74,11 @@ ChangeLog
 ~~~~~~~~~
 
 
-0.8.2: fix typo in parameter (-skip-phix-removal --> --skip-phix-removal)
-0.8.1: uses more sequana tools to handle the options
+========= ====================================================================
+Version   Description
+========= ====================================================================
+0.8.2:    * fix typo in parameter (-skip-phix-removal --> --skip-phix-removal)
+          * implement hiearchical kraken analysis. Required major updates of
+            the sequana kraken rules + general fixes in sequana
+0.8.1:    uses more sequana tools to handle the options
+========= ====================================================================

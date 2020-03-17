@@ -46,13 +46,12 @@ mapping:
         mapping:
             "do":
                 type: bool
-            "database_directory":
-                type: str
-                required: False
             "threads":
                 type: int
                 required: True
                 range: { min: 1 }
+            "databases":
+                type: list
 
     "fastq_sampling":
         type: map

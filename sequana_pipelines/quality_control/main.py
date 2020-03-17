@@ -53,9 +53,18 @@ class Options(argparse.ArgumentParser):
         so.add_options(self)
 
         pipeline_group = self.add_argument_group("pipeline")
-        pipeline_group.add_argument("--skip-phix-removal", action="store_true")
+        pipeline_group.add_argument("--skip-phix-removal", action="store_true",
+            help="Do no remove the Phix")
+        pipeline_group.add_argument("--skip-fastqc-raw", action="store_true",
+            help="Do not perform fastqc on raw data")
+        pipeline_group.add_argument("--skip-fastqc-cleaned", action="store_true",
+            help="Do not perform fastqc on cleaned data")
+
 
         so = CutadaptOptions()
+        so.add_options(self)
+
+        so = KrakenOptions()
         so.add_options(self)
 
 
@@ -85,7 +94,26 @@ def main(args=None):
     manager.update_config(cfg, options, "cutadapt")
 
     # -------------------------------------------------- bwa section
-    cfg.bwa_mem_phix.do = options.skip_phix_removal
+    cfg.bwa_mem_phix.do = not options.skip_phix_removal
+
+    # ------------------------------------- kraken
+    if options.skip_kraken is True:
+        cfg.kraken.do = False
+    else:
+        cfg.kraken.do = True
+
+    if options.kraken_databases:
+        cfg.kraken.databases =  [os.path.abspath(x)
+                                 for x in options.kraken_databases]
+        for this in options.kraken_databases:
+            manager.exists(this)
+
+    if options.skip_fastqc_cleaned:
+        cfg.fastqc.do_after_adapter_removal = False
+
+    if options.skip_fastqc_raw:
+        cfg.fastqc.do_raw = False
+
 
     # finalise the command and save it; copy the snakemake. update the config
     # file and save it.

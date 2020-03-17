@@ -118,9 +118,9 @@ fastq_sampling: # test
 # - do_after_phix_removal: performs fastqc on data without phix
 fastqc:
     options: "--nogroup"
-    do_raw: yes
-    do_after_phix_removal: yes
-    do_after_adapter_removal: yes
+    do_raw: true
+    do_after_phix_removal: no
+    do_after_adapter_removal: true
 
 
 #################################################################
@@ -129,10 +129,12 @@ fastqc:
 # :Parameters:
 #
 # - do:    if unchecked, this rule is ignored
-# - database_directory: select a directory with a kraken database
+# - kraken_databases: a list of databases (full path)
 #   Please see sequana documentation for details
 #
 kraken:
     do: no
-    database_directory:  "%(kraken_database_directory)s"
     threads: 4
+    store_unclassified: True
+    databases:
+        - your_full_path_to_valid_kraken_DB

@@ -60,7 +60,7 @@ if manager.config.cutadapt.tool_choice == "atropos":
         raise Exception
 
 if manager.config.kraken.do is True:
-    if manager.config.kraken.database_directory in ["", None]:
+    if manager.config.kraken.databases in [[], "", None]:
         print("ERROR: you must provide a kraken database path " +
               " Check http://sequana.readthedocs.io/en/master/" +
               "applications.html#sequana-taxonomy")
@@ -232,10 +232,6 @@ if manager.config['cutadapt']['do']:
     expected_output += expand(__fastq_stats_cutadapt__output_done, sample=manager.samples)
 
 
-# if no database provided, let us make sure kraken option is off
-if manager.config.kraken.database_directory is False:
-    manager.config.kraken.do = False
-
 if manager.config.kraken.do:
     if manager.config['cutadapt'].do:
         # todo: handle all adapter removal cases
@@ -245,12 +241,13 @@ if manager.config.kraken.do:
     else:
         __kraken__input = __data__input
 
-    __kraken__output_wkdir = manager.getwkdir("kraken")
-    __kraken__output_html = manager.sample + "/kraken/kraken.html"
-    __kraken__output = manager.sample + "/kraken/kraken.out"
-    __kraken__output_csv = manager.sample + "/kraken/kraken.csv"
-    __kraken__output_json = manager.sample + "/kraken/kraken.json"
-    include: sm.modules['kraken']
+    __kraken__output_wkdir = manager.sample + "/kraken"
+    __kraken__output_html = __kraken__output_wkdir + "/kraken/kraken.html"
+    __kraken__output_out = __kraken__output_wkdir + "/kraken/kraken.out"
+    __kraken__output_csv = __kraken__output_wkdir + "/kraken/kraken.csv"
+    __kraken__output_json = __kraken__output_wkdir + "/kraken/kraken.json"
+
+    include: sm.modules["kraken/1.1"]
     expected_output.append(expand(__kraken__output_html, sample=manager.samples))
     expected_output.append(expand(__kraken__output_json, sample=manager.samples))
 
@@ -263,9 +260,9 @@ __rulegraph__mapper = {
     "fastqc_phix": "../fastqc_phix.html",
     "fastqc_cutadapt": "../fastqc_cutadapt.html",
     "cutadapt": "../cutadapt.html",
-    "kraken": "../kraken/kraken.html",
-    "kraken_translate": "../kraken/kraken.html",
-    "kraken_to_krona": "../kraken/kraken.html",
+    "kraken": "../kraken/kraken/kraken.html",
+    "kraken_translate": "../kraken/kraken/kraken.html",
+    "kraken_to_krona": "../kraken/kraken/kraken.html",
 }
 include: sm.modules['rulegraph']
 expected_output.extend([__rulegraph__output])
@@ -379,14 +376,14 @@ onsuccess:
 
         # The Kraken section
         if manager.config.kraken.do:
-            krakenmod = KrakenModule(proj + "/kraken")
+            krakenmod = KrakenModule(proj + "/kraken/kraken")
             sample_summary['kraken_json'] = json.loads(krakenmod._get_stats().to_json())
             conf.summary_sections.append({
                 "name": "Kraken ",
                 "anchor'": "kraken",
                 "content": krakenmod._get_summary_section()
             })
-            print("Copying files")
+            logger.info("Copying files")
             shell('cp -r %s/kraken/ %s' % (proj, report_dir))
 
         # The cutadapt report (independent)
@@ -420,12 +417,16 @@ onsuccess:
         sm.create_cleanup(proj)
 
     try:
-        print("Create multi summary file")
+        logger.info("Creating multi summary file")
         shell("sequana_summary -m")
+        shell("mv multi_summary.html summary.html")
     except: pass
 
-    from sequana.snaketools import OnSuccess
-    sm.OnSuccess()() # create instance and execute to create Makefile and cleanup
-
+    from sequana.snaketools import OnSuccessCleaner
+    sc = OnSuccessCleaner("quality_control.rules") 
+    sc.files_to_remove("phix174.fa", "requirements.txt")
+    sc.add_makefile()
+    # For later
+    #sm.clean_multiqc(__multiqc__output)
 onerror:
     print("An error occurred. See message above.")
