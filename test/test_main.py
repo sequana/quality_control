@@ -32,13 +32,13 @@ def test_full():
         wk = directory
 
         cmd = "sequana_pipelines_quality_control --input-directory {} "
-        cmd += "--working-directory {}  --force"
+        cmd += "--working-directory {}  --force --skip-kraken "
         cmd = cmd.format(sharedir, wk)
         subprocess.call(cmd.split())
 
         stat = subprocess.call("sh quality_control.sh".split(), cwd=wk)
 
-        assert os.path.exists(wk + "/multi_summary.html")
+        assert os.path.exists(wk + "/summary.html")
 
 def test_version():
     cmd = "sequana_pipelines_quality_control --version"
