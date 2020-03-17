@@ -423,8 +423,9 @@ onsuccess:
     except: pass
 
     from sequana.snaketools import OnSuccessCleaner
-    sc = OnSuccessCleaner("quality_control.rules") 
-    sc.files_to_remove("phix174.fa", "requirements.txt")
+    sc = OnSuccessCleaner("quality_control") 
+    sc.files_to_remove.append("phiX174.fa")
+    sc.files_to_remove.append("requirements.txt")
     sc.add_makefile()
     # For later
     #sm.clean_multiqc(__multiqc__output)
