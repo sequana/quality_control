@@ -314,7 +314,14 @@ onsuccess:
     # the stats image
     snake_parser = snakemake.get_argument_parser().parse_args()
     json_list = expand(__summary_pipeline__json_output, sample=manager.samples)
-    sm.add_stats_summary_json(json_list, snake_parser)
+    for jfile in json_list:
+        with open(jfile, 'r') as fp:
+            jdict = json.load(fp)
+        jdict['stats'] = snake_parser.stats
+        j = json.dumps(jdict)
+        with open(jfile, 'w') as fp:
+            print(j, file=fp)
+
 
     # Main directory
     from sequana.utils import config as conf
@@ -418,9 +425,13 @@ onsuccess:
 
     try:
         logger.info("Creating multi summary file")
-        shell("sequana_summary -m")
-        shell("mv multi_summary.html summary.html")
-    except: pass
+        from sequana.modules_report.multi_summary import MultiSummary
+        from sequana.utils import config as cfg
+        cfg.output_dir = "."
+        sms = MultiSummary(output_filename="summary.html")
+    except Exception as err: 
+        print(err)
+
 
     from sequana.snaketools import OnSuccessCleaner
     sc = OnSuccessCleaner("quality_control") 

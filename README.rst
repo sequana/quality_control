@@ -77,6 +77,7 @@ ChangeLog
 ========= ====================================================================
 Version   Description
 ========= ====================================================================
+0.8.4     * fix the onsuccess section to reflect changes in sequana 0.9.3
 0.8.3     * fix cleaning output files
 0.8.2     * fix typo in parameter (-skip-phix-removal --> --skip-phix-removal)
           * implement hiearchical kraken analysis. Required major updates of
