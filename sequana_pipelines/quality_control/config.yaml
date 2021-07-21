@@ -6,10 +6,9 @@
 # If input_directory provided, use it otherwise if input_pattern provided,
 # use it, otherwise use input_samples.
 # ============================================================================
-
-input_directory: "%(input_directory)s"
-input_readtag: "%(input_readtag)s"
-input_pattern: "%(input_pattern)s"
+input_directory: "."
+input_readtag: "_R[12]_"
+input_pattern: "*fastq.gz"
 
 # if files are required for a pipeline and are within sequana or should
 # be downloaded before the pipeline provide them in this section
@@ -46,19 +45,13 @@ bwa_mem_phix:
 #######################################################################
 # Quality trimming and adapter removal
 #
-# If a design_file is provided the forward and reverse complement adapters
-# are automatically extracted from this file (given the sample name contained
-# in the filenames). In such case, the fwd and rev fields are ignored.
-#
-# If there is no design_file, the fwd and rev fields are used. It can be a
+# For adapter removal, the fwd and rev fields are used. It can be a
 # string, or a filename. If a filename, it must be prefixed with "file:" to
 # specify that it is a file and not a string. If the tool is cutadapt, the empty
 # fwd and rev fields means that no adapters are to be used.
 #
 # :Parameters:
 #
-# - adapter_choice: to be used with a design_file only (see below for valid values)
-# - design_file: a valid CSV file with mapping of index and sample name
 # - fwd: a string or file (prefixed with *file:*)
 # - m: 20 means discard trimmed reads that are shorter than 20.
 #         must be > 0
@@ -76,22 +69,27 @@ bwa_mem_phix:
 #            of -O to 6 (at least 6 bases are required to match before
 #            trimming of an adapter)
 #
-# :Note: If design_file is provided, fwd and rev fields are ignored
-#
-# adapter_choice__ = ["", "Nextera", "NEBNext", "NEXTFlex48_DNA", "Rubicon", "TruSeq", "TruSeqCD_DNA", "NEXTFlex96_DNA", "TruSeqCD_alt_DNA"]
 # tool_choice__ = ["atropos", "cutadapt"]
 cutadapt:
-    do: yes
+    do: true
     tool_choice: cutadapt
-    adapter_choice:
-    design_file:
-    fwd:
-    rev:
+    fwd: ''
+    rev: ''
     m: 20
     mode: "b"
     options: "-O 6 --trim-n"
     quality: 30
     threads: 4
+
+
+
+
+# sofware__choice = ["atropos", "cutadapt"]
+trimming:
+    software_choice: cutadapt
+    do: true
+
+
 
 
 #################################################################
@@ -135,6 +133,5 @@ fastqc:
 kraken:
     do: no
     threads: 4
-    store_unclassified: True
     databases:
         - your_full_path_to_valid_kraken_DB

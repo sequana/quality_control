@@ -3,7 +3,7 @@ This is is the **quality_control** pipeline from the `Sequana <https://sequana.r
 :Overview: A quality control pipeline for illumina data set. This pipeline removes contaminants (e.g. Phix), performs fastqc, adapter cleaning and trimming and checks for contaminants
 :Input: Raw fastq files
 :Output: Cleaned fastQ files, remove phix and adapters + taxonomy
-:Status: production.
+:Status: production. **not maintained**. Please use sequana_fastqc and sequana_multitax pipeline instead
 :Citation: Cokelaer et al, (2017), ‘Sequana’: a Set of Snakemake NGS pipelines, Journal of Open Source Software, 2(16), 352, JOSS DOI doi:10.21105/joss.00352
 
 
@@ -47,7 +47,7 @@ This pipelines requires the following executable(s):
 
 - fastqc
 - bwa
-- kraken (optional)
+- kraken2 (optional)
 - krona (optional)
 - sambamba
 - samtools
@@ -77,6 +77,8 @@ ChangeLog
 ========= ====================================================================
 Version   Description
 ========= ====================================================================
+0.9.0     * remove design_file for cutadapt to reflect changes in
+            sequana 0.12.0 + update kraken rules to use a kraken2 version
 0.8.4     * fix the onsuccess section to reflect changes in sequana 0.9.3
 0.8.3     * fix cleaning output files
 0.8.2     * fix typo in parameter (-skip-phix-removal --> --skip-phix-removal)

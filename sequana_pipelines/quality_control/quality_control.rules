@@ -1,22 +1,29 @@
-"""Phix removal pipeline
-
-Author: Thomas Cokelaer
-Affiliation: Institut Pasteur @ 2016
-
-This pipeline is part of Sequana software (sequana.readthedocs.io)
-"""
-import json
-import os
+##############################################################################
+#
+#  Copyright (c) 2016-2021 - Sequana Dev Team (https://sequana.readthedocs.io)
+#
+#  The full license is in the LICENSE file, distributed with this software.
+#
+#  Website:       https://github.com/sequana/sequana
+#  Documentation: http://sequana.readthedocs.io
+#  Contributors:  https://github.com/sequana/sequana/graphs/contributors
+##############################################################################
 import glob
+import os
+import shutil
+import subprocess
+
+
+# Some sequana related tools
 import sequana
 from sequana import snaketools as sm
 
-sm.init("quality_control.rules", globals())
-
-
-# This must be defined before the include 
+# The main config file
 configfile: "config.yaml"
-__snakefile__ = srcdir(__snakefile__)
+
+# The sequana pipeline manager
+manager = sm.PipelineManager("quality_control", config)
+manager.setup(globals(), mode="warning")
 
 
 # Generic include of some dynamic modules
@@ -24,33 +31,8 @@ exec(open(sequana.modules["bwa_mem_dynamic"], "r").read())
 exec(open(sequana.modules["fastqc_dynamic"], "r").read())
 exec(open(sequana.modules["fastq_stats_dynamic"], "r").read())
 
-# A convenient manager
-manager = sm.PipelineManager("quality_control", config)
 
 # Sanity checks ============================================================
-
-
-if manager.config.cutadapt.design_file:
-    try:
-        sequana.expdesign.ExpDesignAdapter(manager.config.cutadapt.design_file, verbose=False)
-    except Exception as err:
-        from sequana import logger
-        logger.__name__ = "quality control"
-        logger.error("Quality control error. Incorrect design file")
-        raise ValueError(err)
-
-    try:
-        from sequana import FindAdaptersFromDesign
-        ff = FindAdaptersFromDesign(manager.config.cutadapt.design_file, 
-                manager.config.cutadapt.adapter_choice)
-        ff.check()
-    except Exception as err:
-        from sequana import logger
-        logger.__name__ = "quality control"
-        logger.error("Quality control error. Incorrect design file")
-        raise err
-
-
 
 if manager.config.cutadapt.tool_choice == "atropos":
     if manager.config.cutadapt.threads < 2:
@@ -162,26 +144,20 @@ if manager.config.bwa_mem_phix.do:
     expected_output.extend(expand(__fastq_stats_phix__output_done, sample=manager.samples))
 
 
+valid_trimmer = ['cutadapt', 'atropos']
+if manager.config.trimming.software_choice not in valid_trimmer:
+    print(f"Invalid choice for trimming tool. Choose one in {valid_trimmer}")
+    sys.exit(1)
+
 # Perform the adapter removal and trimming
-if manager.config['cutadapt']['do']:
-    adapter_removal = manager.config['cutadapt']['tool_choice']
+if manager.config['trimming']['do']:
+    adapter_tool = manager.config.trimming.software_choice
 
-    from sequana.adapters import _get_registered_adapters as registered
-    from sequana.adapters import get_sequana_adapters
-
-    # Users may provide Nextera, PCRFree, Rubicon or other registered adapters
     fwd = manager.config.cutadapt.fwd
-    if isinstance(fwd, str) and fwd in registered():
-        filename = "file:"+ get_sequana_adapters(fwd, "fwd")
-        manager.config.cutadapt.fwd = filename
-
     rev = manager.config.cutadapt.rev
-    if isinstance(rev, str) and rev in registered():
-        filename = "file:"+ get_sequana_adapters(rev, "revcomp")
-        manager.config.cutadapt.rev = filename
 
-    if adapter_removal in ["cutadapt", "atropos"]:
-        adapter_removal = "cutadapt"
+    if adapter_tool in ["cutadapt", "atropos"]:
+        adapter_tool = "cutadapt"
         if manager.config.bwa_mem_phix.do:
             __cutadapt__input_fastq = [x for x in __bwa_bam_to_fastq__fastq_output
                                        if "unmapped" in x]
@@ -206,8 +182,6 @@ if manager.config['cutadapt']['do']:
         __cutadapt__fwd = manager.config.cutadapt.fwd
         __cutadapt__rev = manager.config.cutadapt.rev
 
-        __cutadapt__design = manager.config.cutadapt.design_file
-        __cutadapt__design_adapter = manager.config['cutadapt']['adapter_choice']
         __cutadapt__options = manager.config.cutadapt.options
         __cutadapt__mode = manager.config.cutadapt.mode
         __cutadapt__log = "%s/logs/cutadapt/cutadapt.txt" % manager.sample
@@ -218,18 +192,18 @@ if manager.config['cutadapt']['do']:
 
     # Now we can perform again a FastQC and FastQ stats
     if manager.config.fastqc.do_after_adapter_removal:
-        __fastqc_cutadapt__input_fastq = __cutadapt__output
-        __fastqc_cutadapt__output_done = manager.getname("fastqc_cutadapt", ".done")
-        __fastqc_cutadapt__wkdir = manager.getwkdir("fastqc_cutadapt")
-        __fastqc_cutadapt__log = "%s/fastqc_cutadapt/fastqc.log" % manager.sample
-        include: fastqc_dynamic(adapter_removal, manager)
-        expected_output += expand(__fastqc_cutadapt__output_done, sample=manager.samples)
+        __fastqc_after_trimming__input_fastq = __cutadapt__output
+        __fastqc_after_trimming__output_done = manager.getname("fastqc_cutadapt", ".done")
+        __fastqc_after_trimming__wkdir = manager.getwkdir("fastqc_cutadapt")
+        __fastqc_after_trimming__log = "%s/fastqc_cutadapt/fastqc.log" % manager.sample
+        include: fastqc_dynamic("after_trimming", manager)
+        expected_output += expand(__fastqc_after_trimming__output_done, sample=manager.samples)
 
-    __fastq_stats_cutadapt__input_fastq = __cutadapt__output
-    __fastq_stats_cutadapt__output_done = manager.getname("fastq_stats_cutadapt", ".done")
-    __fastq_stats_cutadapt__wkdir = manager.getwkdir("fastq_stats_cutadapt")
-    include: fastq_stats_dynamic(adapter_removal, manager)
-    expected_output += expand(__fastq_stats_cutadapt__output_done, sample=manager.samples)
+    __fastq_stats_after_trimming__input_fastq = __cutadapt__output
+    __fastq_stats_after_trimming__output_done = manager.getname("fastq_stats_cutadapt", ".done")
+    __fastq_stats_after_trimming__wkdir = manager.getwkdir("fastq_stats_cutadapt")
+    include: fastq_stats_dynamic("after_trimming", manager)
+    expected_output += expand(__fastq_stats_after_trimming__output_done, sample=manager.samples)
 
 
 if manager.config.kraken.do:
@@ -247,14 +221,14 @@ if manager.config.kraken.do:
     __kraken__output_csv = __kraken__output_wkdir + "/kraken/kraken.csv"
     __kraken__output_json = __kraken__output_wkdir + "/kraken/kraken.json"
 
-    include: sm.modules["kraken/1.1"]
+    include: sm.modules["kraken/2.0"]
     expected_output.append(expand(__kraken__output_html, sample=manager.samples))
     expected_output.append(expand(__kraken__output_json, sample=manager.samples))
 
 
 # Include the rule graph
-__rulegraph__input = __snakefile__
-__rulegraph__output = "rulegraph/rulegraph.svg"
+__rulegraph__input = manager.snakefile
+__rulegraph__output = ".sequana/rulegraph.svg"
 __rulegraph__mapper = {
     "fastqc_samples": "../fastqc_samples.html",
     "fastqc_phix": "../fastqc_phix.html",
@@ -287,7 +261,7 @@ else:
 __summary_pipeline__html = []
 __summary_pipeline__rulegraph = __rulegraph__output
 __summary_pipeline__requirements = "requirements.txt"
-__summary_pipeline__snakefile = __snakefile__
+__summary_pipeline__snakefile = manager.snakefile
 __summary_pipeline__config = "config.yaml"
 __summary_pipeline__name = "Quality Control"
 __summary_pipeline__json_output = manager.getname("summary_pipeline", ".json")
@@ -428,7 +402,7 @@ onsuccess:
         from sequana.modules_report.multi_summary import MultiSummary
         from sequana.utils import config as cfg
         cfg.output_dir = "."
-        sms = MultiSummary(output_filename="summary.html")
+        sms = MultiSummary(pattern="**/report_qc*/summary.json", output_filename="summary.html")
     except Exception as err: 
         print(err)
 
