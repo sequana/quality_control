@@ -6,9 +6,9 @@
 # If input_directory provided, use it otherwise if input_pattern provided,
 # use it, otherwise use input_samples.
 # ============================================================================
-input_directory: "."
-input_readtag: "_R[12]_"
-input_pattern: "*fastq.gz"
+input_directory: /home/cokelaer/Data/Hm2
+input_readtag: _R[12]_
+input_pattern: '*fastq.gz'
 
 # if files are required for a pipeline and are within sequana or should
 # be downloaded before the pipeline provide them in this section
@@ -32,12 +32,12 @@ requirements:
 # - options: any options recognised by BWA tool
 # - threads: number of threads to be used
 bwa_mem_phix:
-    do: yes
-    reference_file: "phiX174.fa"
-    index_algorithm: "is"
-    options: '-T 30'
+    do: true
+    reference_file: phiX174.fa
+    index_algorithm: is
+    options: -T 30
     threads: 4
-    tmp_directory: './tmp'
+    tmp_directory: ./tmp
 
 
 
@@ -76,8 +76,8 @@ cutadapt:
     fwd: ''
     rev: ''
     m: 20
-    mode: "b"
-    options: "-O 6 --trim-n"
+    mode: b
+    options: ' -O 6 --trim-n'
     quality: 30
     threads: 4
 
@@ -90,20 +90,6 @@ trimming:
     do: true
 
 
-
-
-#################################################################
-# Select a sub-sample of the original FastQ files
-#
-# :Parameters:
-#
-# - do: if unchecked, this rule is ignored
-# - N:  number of reads to use
-#
-fastq_sampling: # test
-    do: no
-    N: 2500
-
 #################################################################
 # FastQC section
 #
@@ -115,9 +101,10 @@ fastq_sampling: # test
 #   adapter removal
 # - do_after_phix_removal: performs fastqc on data without phix
 fastqc:
-    options: "--nogroup"
+    options: --nogroup
+    threads: 4
     do_raw: true
-    do_after_phix_removal: no
+    do_after_phix_removal: true
     do_after_adapter_removal: true
 
 
@@ -131,7 +118,10 @@ fastqc:
 #   Please see sequana documentation for details
 #
 kraken:
-    do: no
+    do: false
     threads: 4
     databases:
         - your_full_path_to_valid_kraken_DB
+
+fastq_stats:
+    max_reads: 500000

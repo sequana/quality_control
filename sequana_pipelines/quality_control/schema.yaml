@@ -41,6 +41,24 @@ mapping:
                 default: './tmp'
                 pattern: .*
 
+    "trimming":
+        type: map
+        mapping:
+          "software_choice":
+            type: str
+            enum: ["atropos", "cutadapt"]
+          "do":
+            type: bool
+    
+
+    "fastq_stats":
+        type: map
+        mapping:
+          "max_reads":
+            type: int
+            required: True
+            range: { min: 1 }
+
     "kraken":
         type: map
         mapping:
@@ -51,17 +69,8 @@ mapping:
                 required: True
                 range: { min: 1 }
             "databases":
-                type: list
+                type: any
 
-    "fastq_sampling":
-        type: map
-        mapping:
-            "do":
-                type: bool
-                required: True
-            "N":
-                type: int
-                required: False
 
     "fastqc":
         type: map
@@ -75,6 +84,10 @@ mapping:
                 type: bool
             "do_after_adapter_removal":
                 type: bool
+            "threads":
+                type: int
+                required: True
+                range: { min: 1 }
 
     "requirements":
         type: seq
@@ -91,16 +104,6 @@ mapping:
                 type: str
                 enum: [cutadapt,atropos]
                 required: True
-            "adapter_choice":
-                type: str
-                # if we set this, the pipeline is not dynamic anymore, we need
-                # to add manually the adapters. We comment this for now.
-                #enum: ["", "Nextera", "NEBNext", "PCRFree", "Rubicon", "TruSeq", "TruSeqCD"]
-                required: False
-            "design_file":
-                type: str
-                required: False
-                pattern: .*
             "fwd":
                 type: str
                 required: False

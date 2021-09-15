@@ -53,7 +53,7 @@ setup(
 
     # package installation
     packages = ["sequana_pipelines.quality_control",
-        'sequana_pipelines.quality_control.data' ],
+        "sequana_pipelines.quality_control.data"],
 
     install_requires = "sequana",
 
@@ -67,7 +67,6 @@ setup(
     zip_safe=False,
 
     entry_points = {'console_scripts':[
-        'sequana_pipelines_quality_control=sequana_pipelines.quality_control.main:main',
         'sequana_quality_control=sequana_pipelines.quality_control.main:main']
     }
 

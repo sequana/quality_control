@@ -5,8 +5,9 @@
 #  The full license is in the LICENSE file, distributed with this software.
 #
 #  Website:       https://github.com/sequana/sequana
+#  Website:       https://github.com/sequana/quality_control
 #  Documentation: http://sequana.readthedocs.io
-#  Contributors:  https://github.com/sequana/sequana/graphs/contributors
+#  Documentation: https://github.com/sequana/quality_control/README.rst
 ##############################################################################
 import glob
 import os
@@ -16,20 +17,41 @@ import subprocess
 
 # Some sequana related tools
 import sequana
-from sequana import snaketools as sm
 
-# The main config file
+
+from sequana_pipetools import PipelineManager
+from sequana_pipetools import snaketools as sm
+
+# This must be defined before the include
 configfile: "config.yaml"
 
 # The sequana pipeline manager
-manager = sm.PipelineManager("quality_control", config)
+manager = PipelineManager("quality_control", config)
 manager.setup(globals(), mode="warning")
 
+expected_output = []
 
-# Generic include of some dynamic modules
-exec(open(sequana.modules["bwa_mem_dynamic"], "r").read())
-exec(open(sequana.modules["fastqc_dynamic"], "r").read())
-exec(open(sequana.modules["fastq_stats_dynamic"], "r").read())
+# stats on raw data and optional fastac
+expected_output += expand("{sample}/fastq_stats_samples/{sample}.json", sample=manager.samples)
+if manager.config.fastqc.do_raw:
+    expected_output += expand("{sample}/fastqc_raw/fastqc.done", sample=manager.samples)
+
+# if we remove the phix, 
+if manager.config.bwa_mem_phix.do:
+    expected_output += expand("{sample}/fastq_stats_phix/{sample}.json", sample=manager.samples)
+    if manager.config.fastqc.do_after_phix_removal:
+        expected_output += expand("{sample}/fastqc_phix/fastqc.done", sample=manager.samples)
+
+
+if manager.config.fastqc.do_after_adapter_removal:
+    expected_output += expand("{sample}/fastqc_trimmed/fastqc.done", sample=manager.samples)
+
+if manager.config.kraken.do:
+    expected_output += expand("{sample}/kraken/kraken/kraken.html", sample=manager.samples)
+    expected_output += expand("{sample}/kraken/kraken/kraken.json", sample=manager.samples)
+
+rule pipeline:
+    input: ".sequana/rulegraph.svg", expand(manager.getname("summary_pipeline", ".json"), sample=manager.samples), expected_output
 
 
 # Sanity checks ============================================================
@@ -51,65 +73,88 @@ if manager.config.kraken.do is True:
 # Starting of the pipeline
 __rawdata__input = manager.getrawdata()
 
-# We can add this optional sampling of the data
-if manager.config.fastq_sampling.do is True:
-    __fastq_sampling__input_fastq = __rawdata__input
-    # TODO: here 001 is added manually but needs to be taken care
-    # of inside the mananger. Used only in this pipeline for illumnina
-    # so works for now
-    if manager.paired:
-        __fastq_sampling__output_fastq = [
-            "fastq_sampling/%s_R1_001.fastq.gz" % (manager.sample),
-            "fastq_sampling/%s_R2_001.fastq.gz" % (manager.sample)]
-    else:
-        __fastq_sampling__output_fastq = [
-            "fastq_sampling/%s_R1_001.fastq.gz" % (manager.sample)]
-    include: sm.modules["fastq_sampling"]
-    __data__input = __fastq_sampling__output_fastq
-else:
-    __data__input = __rawdata__input
-
 
 # FASTQC on input data set
 if manager.config.fastqc.do_raw:
-    __fastqc_samples__input_fastq = __data__input
-    __fastqc_samples__output_done = manager.getname("fastqc_samples", ".done")
-    __fastqc_samples__wkdir       = manager.getwkdir("fastqc_samples")
-    __fastqc_samples__log = "%s/fastqc_samples/fastqc.log" % manager.sample
-    include: fastqc_dynamic("samples", manager)
-    expected_output.extend(expand(__fastqc_samples__output_done, sample=manager.samples))
+    rule fastqc_samples:
+        input: __rawdata__input
+        output:
+            done="{sample}/fastqc_raw/fastqc.done"
+        params:
+            options=config['fastqc']["options"],
+            working_directory="{sample}/fastqc_raw"
+        threads:
+            config["fastqc"]["threads"]
+        log:
+            "logs/{sample}/fastqc_raw.log"
+        wrapper:
+            "main/wrappers/fastqc"
+
 
 
 # FASTQ stats on input data set
-__fastq_stats_samples__input_fastq = __data__input
-__fastq_stats_samples__output_done = manager.getname("fastq_stats_samples", ".done")
-__fastq_stats_samples__wkdir       = manager.getwkdir("fastq_stats_samples")
-include: fastq_stats_dynamic("samples", manager)
-expected_output.extend(expand(__fastq_stats_samples__output_done, sample=manager.samples))
+rule fastq_stat_samples:
+    input: __rawdata__input
+    output:
+        json="{sample}/fastq_stats_samples/{sample}.json",
+        gc="{sample}/fastq_stats_samples/{sample}_gc.png",
+        boxplot="{sample}/fastq_stats_samples/{sample}_boxplot.png"
+    params:
+        max_reads=config['fastq_stats']['max_reads']
+    wrapper:
+        "main/wrappers/fastq_stats"
+
 
 
 # Do we want to remove the Phix ?
 if manager.config.bwa_mem_phix.do:
-    reference = config["bwa_mem_phix"]["reference_file"]
-    if not os.path.isfile(reference + ".fai"):
-        exec(open(sequana.modules["dynamic_copy"], "r").read())
-        __copy_ref__input = reference
-        __copy_ref__output = "reference/" + os.path.basename(reference)
-        include: dynamic_copy("ref", manager)
-        __bwa_mem_phix__reference = __copy_ref__output
-    else:
-        __bwa_mem_phix__reference = reference
+    __copy_ref__input = config["bwa_mem_phix"]["reference_file"]
+    __copy_ref__output = "reference/" + os.path.basename(__copy_ref__input)
+
+    rule copy_reference:
+        input: __copy_ref__input
+        output:
+            ref=__copy_ref__output,
+        shell:
+            """
+            cp {input} {output.ref}
+            """
+
     # Mapping input / output
-    __bwa_index_phix__log = "common_logs/bwa_index.log"
-    __bwa_mem_phix__fastq = __data__input
-    __bwa_mem_phix__bam = manager.getname("bwa_mem_phix", ".sorted.bam")
-    __bwa_mem_phix__fai = __bwa_mem_phix__reference + ".fai"
-    __bwa_mem_phix__log = manager.getlogdir("bwa_mem_phix")
+    rule bwa_index:
+        input:
+            reference=__copy_ref__output
+        output:
+            bwa_bwt=__copy_ref__output + ".bwt",
+            fai=__copy_ref__output + ".fai"
+        log:
+            "reference/build.log"
+        params:
+            options="",
+            index_algorithm='is'
+        threads: 2
+        wrapper:
+            "main/wrappers/bwa/build"
 
-    include: bwa_mem_dynamic("phix", manager)
+    rule bwa:
+        input:
+            fastq=manager.getrawdata(),
+            bwa_bwt=__copy_ref__output + ".bwt",
+            fai=__copy_ref__output + ".fai",
+            reference=__copy_ref__output
+        output:
+            sorted="{sample}/bwa/{sample}.sorted.bam",
+        log:
+            "{sample}/bwa/{sample}.log"
+        params:
+            options=config["bwa_mem_phix"]["options"],
+            tmp_directory=config["bwa_mem_phix"]["tmp_directory"]
+        threads: 2
+        wrapper:
+            "main/wrappers/bwa/align"
 
-    # BWA_BAM_TO_FASTQ
-    __bwa_bam_to_fastq__input = __bwa_mem_phix__bam
+
+    __bwa_bam_to_fastq__input = "{sample}/bwa/{sample}.sorted.bam"
 
     if manager.paired is True:
         _params = {"sample": manager.sample}
@@ -131,17 +176,33 @@ if manager.config.bwa_mem_phix.do:
     # Run a FASTQC on the data without phix
     if manager.config.fastqc.do_after_phix_removal:
         __fastqc_phix__input_fastq = [x for x in __bwa_bam_to_fastq__fastq_output if "unmapped" not in x]
-        __fastqc_phix__output_done = manager.getname("fastqc_phix", ".fastqc.done")
-        __fastqc_phix__wkdir = manager.getwkdir("fastqc_phix")
-        __fastqc_phix__log = "%s/fastqc_phix/fastqc.log" % manager.sample
-        include: fastqc_dynamic("phix", manager)
-        expected_output.extend(expand(__fastqc_phix__output_done, sample=manager.samples))
+        rule fastqc_phix:
+            input: __fastqc_phix__input_fastq
+            output: 
+                done="{sample}/fastqc_phix/fastqc.done"
+            params:
+                options=config['fastqc']["options"],
+                working_directory="{sample}/fastqc_phix"
+            threads:
+                threads= config["fastqc"]["threads"],
+            log:
+                "logs/{sample}/fastqc_phix.log"
+            wrapper:
+                "main/wrappers/fastqc"
 
-    __fastq_stats_phix__input_fastq = __bwa_bam_to_fastq__fastq_output
-    __fastq_stats_phix__output_done = manager.getname("fastq_stats_phix", ".done")
-    __fastq_stats_phix__wkdir = manager.getwkdir("fastq_stats_phix")
-    include: fastq_stats_dynamic("phix", manager)
-    expected_output.extend(expand(__fastq_stats_phix__output_done, sample=manager.samples))
+
+
+        rule fastq_stat_phix:
+            input: __bwa_bam_to_fastq__fastq_output
+            output:
+                json="{sample}/fastq_stats_phix/{sample}.json",
+                gc="{sample}/fastq_stats_phix/{sample}_gc.png",
+                boxplot="{sample}/fastq_stats_phix/{sample}_boxplot.png"
+            params:
+                max_reads=config['fastq_stats']['max_reads']
+            wrapper:
+                "main/wrappers/fastq_stats"
+
 
 
 valid_trimmer = ['cutadapt', 'atropos']
@@ -192,18 +253,19 @@ if manager.config['trimming']['do']:
 
     # Now we can perform again a FastQC and FastQ stats
     if manager.config.fastqc.do_after_adapter_removal:
-        __fastqc_after_trimming__input_fastq = __cutadapt__output
-        __fastqc_after_trimming__output_done = manager.getname("fastqc_cutadapt", ".done")
-        __fastqc_after_trimming__wkdir = manager.getwkdir("fastqc_cutadapt")
-        __fastqc_after_trimming__log = "%s/fastqc_cutadapt/fastqc.log" % manager.sample
-        include: fastqc_dynamic("after_trimming", manager)
-        expected_output += expand(__fastqc_after_trimming__output_done, sample=manager.samples)
-
-    __fastq_stats_after_trimming__input_fastq = __cutadapt__output
-    __fastq_stats_after_trimming__output_done = manager.getname("fastq_stats_cutadapt", ".done")
-    __fastq_stats_after_trimming__wkdir = manager.getwkdir("fastq_stats_cutadapt")
-    include: fastq_stats_dynamic("after_trimming", manager)
-    expected_output += expand(__fastq_stats_after_trimming__output_done, sample=manager.samples)
+        rule fastqc_trimmed:
+            input: __cutadapt__output
+            output:
+                done="{sample}/fastqc_trimmed/fastqc.done"
+            params:
+                options=config['fastqc']["options"],
+                working_directory="{sample}/fastqc_phix"
+            threads:
+                config["fastqc"]["threads"]
+            log:
+                "logs/{sample}/fastqc_trimmed.log"
+            wrapper:
+                "main/wrappers/fastqc"
 
 
 if manager.config.kraken.do:
@@ -215,37 +277,38 @@ if manager.config.kraken.do:
     else:
         __kraken__input = __data__input
 
-    __kraken__output_wkdir = manager.sample + "/kraken"
-    __kraken__output_html = __kraken__output_wkdir + "/kraken/kraken.html"
-    __kraken__output_out = __kraken__output_wkdir + "/kraken/kraken.out"
-    __kraken__output_csv = __kraken__output_wkdir + "/kraken/kraken.csv"
-    __kraken__output_json = __kraken__output_wkdir + "/kraken/kraken.json"
+    __kraken__output_wkdir = manager.sample + "/kraken/"
+    __kraken__output_html = __kraken__output_wkdir + "kraken/kraken.html"
+    __kraken__output_out = __kraken__output_wkdir + "kraken/kraken.out"
+    __kraken__output_csv = __kraken__output_wkdir + "kraken/kraken.csv"
+    __kraken__output_json = __kraken__output_wkdir + "kraken/kraken.json"
 
     include: sm.modules["kraken/2.0"]
-    expected_output.append(expand(__kraken__output_html, sample=manager.samples))
-    expected_output.append(expand(__kraken__output_json, sample=manager.samples))
 
 
 # Include the rule graph
-__rulegraph__input = manager.snakefile
 __rulegraph__output = ".sequana/rulegraph.svg"
 __rulegraph__mapper = {
-    "fastqc_samples": "../fastqc_samples.html",
+    "fastqc_raw": "../fastqc_raw.html",
     "fastqc_phix": "../fastqc_phix.html",
-    "fastqc_cutadapt": "../fastqc_cutadapt.html",
+    "fastqc_trimmed": "../fastqc_trimmed.html",
     "cutadapt": "../cutadapt.html",
     "kraken": "../kraken/kraken/kraken.html",
-    "kraken_translate": "../kraken/kraken/kraken.html",
+    "kraken_translate": "../kraken/raken/kraken.html",
     "kraken_to_krona": "../kraken/kraken/kraken.html",
 }
-include: sm.modules['rulegraph']
-expected_output.extend([__rulegraph__output])
 
 
-# Add Conda
-__conda__output = "requirements.txt"
-include: sm.modules['conda']   # Create requirements.txt(dependencies)
-expected_output.extend([__conda__output])
+rule rulegraph:
+    input: manager.snakefile
+    output:
+        svg = __rulegraph__output
+    params:
+        mapper = __rulegraph__mapper,
+        configname = "config.yaml"
+    wrapper:
+        "main/wrappers/rulegraph"
+
 
 
 # create a json file that summarise information of your pipeline
@@ -258,22 +321,23 @@ elif manager.config.bwa_mem_phix.do:
 else:
     __summary_pipeline__outputs = []
 
+# temporary hack
+if not os.path.exists(".sequana/env.yaml"):
+    os.makedirs(".sequana", exist_ok=True)
+    with open(".sequana/env.yaml", "w") as f:
+        f.write("")
 __summary_pipeline__html = []
 __summary_pipeline__rulegraph = __rulegraph__output
-__summary_pipeline__requirements = "requirements.txt"
+__summary_pipeline__requirements = ".sequana/env.yaml"
 __summary_pipeline__snakefile = manager.snakefile
 __summary_pipeline__config = "config.yaml"
 __summary_pipeline__name = "Quality Control"
 __summary_pipeline__json_output = manager.getname("summary_pipeline", ".json")
 include: sm.modules["summary_pipeline"]
-expected_output.append(expand(__summary_pipeline__json_output,
-                              sample=manager.samples))
+
 
 # Those rules takes a couple of seconds so no need for a cluster
-localrules: conda, rulegraph
-
-rule pipeline_quality_control:
-    input: expected_output
+localrules: rulegraph
 
 
 onsuccess:
@@ -286,13 +350,13 @@ onsuccess:
     from sequana.modules_report.summary import SummaryModule
 
     # the stats image
-    snake_parser = snakemake.get_argument_parser().parse_args()
+    #snake_parser = snakemake.get_argument_parser().parse_args()
     json_list = expand(__summary_pipeline__json_output, sample=manager.samples)
     for jfile in json_list:
         with open(jfile, 'r') as fp:
             jdict = json.load(fp)
-        jdict['stats'] = snake_parser.stats
-        j = json.dumps(jdict)
+        #jdict['stats'] = snake_parser.stats
+        j = json.dumps(jdict, indent=4)
         with open(jfile, 'w') as fp:
             print(j, file=fp)
 
@@ -308,7 +372,7 @@ onsuccess:
         conf.output_dir = report_dir   # ensure files are stored in the correct location
 
         # Create the 3 FastQC HTML files (independent)
-        for this in ["fastqc_phix", "fastqc_samples", "fastqc_cutadapt"]:
+        for this in ["fastqc_phix", "fastqc_raw", "fastqc_trimmed"]:
             FastQCModule("{}.html".format(this),
                          proj + "/{}/*_fastqc.html".format(this))
 
@@ -318,18 +382,18 @@ onsuccess:
         # First the samples section ------------------------------
         indir = proj + "/fastq_stats_samples"
 
-        fqmod = FastQStatsModule(indir, "fastqc_samples")
+        fqmod = FastQStatsModule(indir, "fastqc_raw")
         sample_summary["fastq_stats_samples_json"] = json.loads(fqmod.get_stats().to_json())
 
         conf.summary_sections.append({
             "name": "Stats (input data)",
-            "title_links": '<a href="fastqc_samples.html">FastQC</a>',
+            "title_links": '<a href="fastqc_raw.html">FastQC</a>',
             "anchor'": "stats",
             "content": fqmod._get_stats_section()
         })
 
         # the phix section ---------------------------------
-        if manager.config.bwa_mem_phix.do:
+        if manager.config.bwa_mem_phix.do :
             phixmod = PhixModule(proj)
             sample_summary["phix_section_json"] = json.loads(phixmod._get_stats().to_json())
             sample_summary["phix_section"] = phixmod._get_summary()
@@ -342,10 +406,10 @@ onsuccess:
 
         # the cutadapt section ----------------------------
         if manager.config.cutadapt.do:
-            cutadapt_mod = CutadaptModule(proj + "/logs/cutadapt/cutadapt.txt", proj)
+            cutadapt_mod = CutadaptModule(f"{proj}/logs/cutadapt/cutadapt.txt", proj)
             sample_summary["cutadapt_json"] = json.loads(cutadapt_mod._get_stats().to_json())
             html = cutadapt_mod._get_stat_section()
-            html += FastQStatsModule(proj + "/fastq_stats_cutadapt", "fastqc_cutadapt")._get_stats_section(
+            html += FastQStatsModule(proj + "/fastq_stats_phix", "fastqc_cutadapt")._get_stats_section(
                 tablename="cutadapt2")
             conf.summary_sections.append({
                 "name": "Adapter ",
@@ -407,12 +471,12 @@ onsuccess:
         print(err)
 
 
-    from sequana.snaketools import OnSuccessCleaner
-    sc = OnSuccessCleaner("quality_control") 
+    sc = sm.OnSuccessCleaner("quality_control") 
     sc.files_to_remove.append("phiX174.fa")
-    sc.files_to_remove.append("requirements.txt")
     sc.add_makefile()
     # For later
     #sm.clean_multiqc(__multiqc__output)
 onerror:
-    print("An error occurred. See message above.")
+    from sequana_pipetools.errors import PipeError
+    p = PipeError("quality_control")
+    p.status()

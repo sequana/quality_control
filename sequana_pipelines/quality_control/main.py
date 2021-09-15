@@ -1,11 +1,8 @@
-# -*- coding: utf-8 -*-
+
 #
 #  This file is part of Sequana software
 #
 #  Copyright (c) 2016-2021 - Sequana Development Team
-#
-#  File author(s):
-#      Thomas Cokelaer <thomas.cokelaer@pasteur.fr>
 #
 #  Distributed under the terms of the 3-clause BSD license.
 #  The full license is in the LICENSE file, distributed with this software.
@@ -17,10 +14,13 @@
 import sys
 import os
 import argparse
+import subprocess
 
 from sequana_pipetools.options import *
+from sequana_pipetools.options import before_pipeline
 from sequana_pipetools.misc import Colors
 from sequana_pipetools.info import sequana_epilog, sequana_prolog
+from sequana_pipetools import SequanaManager
 
 col = Colors()
 
@@ -76,24 +76,16 @@ def main(args=None):
         args = sys.argv
 
     # whatever needs to be called by all pipeline before the options parsing
-    from sequana_pipetools.options import before_pipeline
     before_pipeline(NAME)
 
     # option parsing including common epilog
     options = Options(NAME, epilog=sequana_epilog).parse_args(args[1:])
-
-
-    from sequana.pipelines_common import SequanaManager
 
     # the real stuff is here
     manager = SequanaManager(options, NAME)
 
     # create the beginning of the command and the working directory
     manager.setup()
-    from sequana import logger
-    logger.setLevel(options.level)
-    logger.name = "sequana_quality_control" 
-    logger.info(f"Welcome to sequana_quality_control pipeline.")
 
     # fill the config file with input parameters
     if options.from_project is None:
@@ -149,8 +141,5 @@ def main(args=None):
     if options.run:
         subprocess.Popen(["sh", '{}.sh'.format(NAME)], cwd=options.workdir)
 
-
-
 if __name__ == "__main__":
     main()
-
