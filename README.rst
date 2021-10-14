@@ -38,8 +38,8 @@ Usage
 
 ::
 
-    sequana_pipelines_quality_control --help
-    sequana_pipelines_quality_control --input-directory DATAPATH 
+    sequana_quality_control --help
+    sequana_quality_control --input-directory DATAPATH 
 
 This creates a directory with the pipeline and configuration file. You will then need 
 to execute the pipeline::
@@ -68,7 +68,7 @@ This pipelines requires the following executable(s):
 - pigz
 - cutadapt [or atropos]
 
-.. image:: https://raw.githubusercontent.com/sequana/sequana_quality_control/master/sequana_pipelines/quality_control/dag.png
+.. image:: https://raw.githubusercontent.com/sequana/quality_control/master/sequana_pipelines/quality_control/dag.png
 
 
 Details
@@ -91,9 +91,11 @@ ChangeLog
 ========= ====================================================================
 Version   Description
 ========= ====================================================================
-0.10.0    * add CI actions
 0.9.0     * remove design_file for cutadapt to reflect changes in
-            sequana 0.12.0 + update kraken rules to use a kraken2 version
+            sequana 0.12.0 
+          * update kraken rules to use a kraken2 version
+          * Update to use new sequana framework (0.12)
+          * added CI action
 0.8.4     * fix the onsuccess section to reflect changes in sequana 0.9.3
 0.8.3     * fix cleaning output files
 0.8.2     * fix typo in parameter (-skip-phix-removal --> --skip-phix-removal)
