@@ -329,7 +329,7 @@ if not os.path.exists(".sequana/env.yaml"):
 __summary_pipeline__html = []
 __summary_pipeline__rulegraph = __rulegraph__output
 __summary_pipeline__requirements = ".sequana/env.yaml"
-__summary_pipeline__snakefile = manager.snakefile
+__summary_pipeline__snakefile = str(manager.snakefile)
 __summary_pipeline__config = "config.yaml"
 __summary_pipeline__name = "Quality Control"
 __summary_pipeline__json_output = manager.getname("summary_pipeline", ".json")
