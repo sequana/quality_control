@@ -1,4 +1,18 @@
-This is is the **quality_control** pipeline from the `Sequana <https://sequana.readthedocs.org>`_ project
+
+.. image:: https://badge.fury.io/py/sequana-quality-control.svg
+     :target: https://pypi.python.org/pypi/sequana_quality_control
+
+.. image:: http://joss.theoj.org/papers/10.21105/joss.00352/status.svg
+    :target: http://joss.theoj.org/papers/10.21105/joss.00352
+    :alt: JOSS (journal of open source software) DOI
+
+.. image:: https://github.com/sequana/quality_control/actions/workflows/main.yml/badge.svg
+   :target: https://github.com/sequana/quality_control/actions/workflows    
+
+
+This pipeline is not maintained anymore but should be functional. It is a short-read quality control pipeline
+from the `Sequana <https://sequana.readthedocs.org>`_ project. We would recommend to use the fastqc, demultiplex,
+and multitax pipelines instead.
 
 :Overview: A quality control pipeline for illumina data set. This pipeline removes contaminants (e.g. Phix), performs fastqc, adapter cleaning and trimming and checks for contaminants
 :Input: Raw fastq files
@@ -77,6 +91,7 @@ ChangeLog
 ========= ====================================================================
 Version   Description
 ========= ====================================================================
+0.10.0    * add CI actions
 0.9.0     * remove design_file for cutadapt to reflect changes in
             sequana 0.12.0 + update kraken rules to use a kraken2 version
 0.8.4     * fix the onsuccess section to reflect changes in sequana 0.9.3
