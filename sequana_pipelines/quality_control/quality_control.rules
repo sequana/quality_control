@@ -300,7 +300,7 @@ __rulegraph__mapper = {
 
 
 rule rulegraph:
-    input: manager.snakefile
+    input: str(manager.snakefile)
     output:
         svg = __rulegraph__output
     params:
