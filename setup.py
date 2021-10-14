@@ -55,7 +55,7 @@ setup(
     packages = ["sequana_pipelines.quality_control",
         "sequana_pipelines.quality_control.data"],
 
-    install_requires = "sequana",
+    install_requires = open("requirements.txt", "r").read(),
 
     # This is recursive include of data files
     exclude_package_data = {"": ["__pycache__"]},
