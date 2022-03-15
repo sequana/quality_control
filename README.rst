@@ -91,6 +91,7 @@ ChangeLog
 ========= ====================================================================
 Version   Description
 ========= ====================================================================
+0.10.0    * add missing MANIFEST 
 0.9.0     * remove design_file for cutadapt to reflect changes in
             sequana 0.12.0 
           * update kraken rules to use a kraken2 version
