@@ -2,6 +2,7 @@
 #
 #  Copyright (c) 2016-2021 - Sequana Dev Team (https://sequana.readthedocs.io)
 #
+#  Distributed under the terms of the 3-clause BSD license.
 #  The full license is in the LICENSE file, distributed with this software.
 #
 #  Website:       https://github.com/sequana/sequana
@@ -27,7 +28,7 @@ configfile: "config.yaml"
 
 # The sequana pipeline manager
 manager = PipelineManager("quality_control", config)
-manager.setup(globals(), mode="warning")
+
 
 expected_output = []
 
@@ -36,7 +37,7 @@ expected_output += expand("{sample}/fastq_stats_samples/{sample}.json", sample=m
 if manager.config.fastqc.do_raw:
     expected_output += expand("{sample}/fastqc_raw/fastqc.done", sample=manager.samples)
 
-# if we remove the phix, 
+# if we remove the phix
 if manager.config.bwa_mem_phix.do:
     expected_output += expand("{sample}/fastq_stats_phix/{sample}.json", sample=manager.samples)
     if manager.config.fastqc.do_after_phix_removal:
@@ -51,7 +52,9 @@ if manager.config.kraken.do:
     expected_output += expand("{sample}/kraken/kraken/kraken.json", sample=manager.samples)
 
 rule pipeline:
-    input: ".sequana/rulegraph.svg", expand(manager.getname("summary_pipeline", ".json"), sample=manager.samples), expected_output
+    input: ".sequana/rulegraph.svg",
+        expand("{sample}/summary_pipeline/{sample}.json", sample=manager.samples),
+        expected_output
 
 
 # Sanity checks ============================================================
@@ -70,14 +73,11 @@ if manager.config.kraken.do is True:
               "applications.html#sequana-taxonomy")
         raise Exception
 
-# Starting of the pipeline
-__rawdata__input = manager.getrawdata()
-
 
 # FASTQC on input data set
 if manager.config.fastqc.do_raw:
     rule fastqc_samples:
-        input: __rawdata__input
+        input: manager.getrawdata()
         output:
             done="{sample}/fastqc_raw/fastqc.done"
         params:
@@ -94,7 +94,7 @@ if manager.config.fastqc.do_raw:
 
 # FASTQ stats on input data set
 rule fastq_stat_samples:
-    input: __rawdata__input
+    input: manager.getrawdata()
     output:
         json="{sample}/fastq_stats_samples/{sample}.json",
         gc="{sample}/fastq_stats_samples/{sample}_gc.png",
@@ -192,16 +192,16 @@ if manager.config.bwa_mem_phix.do:
 
 
 
-        rule fastq_stat_phix:
-            input: __bwa_bam_to_fastq__fastq_output
-            output:
-                json="{sample}/fastq_stats_phix/{sample}.json",
-                gc="{sample}/fastq_stats_phix/{sample}_gc.png",
-                boxplot="{sample}/fastq_stats_phix/{sample}_boxplot.png"
-            params:
-                max_reads=config['fastq_stats']['max_reads']
-            wrapper:
-                "main/wrappers/fastq_stats"
+    rule fastq_stat_phix:
+        input: __bwa_bam_to_fastq__fastq_output
+        output:
+            json="{sample}/fastq_stats_phix/{sample}.json",
+            gc="{sample}/fastq_stats_phix/{sample}_gc.png",
+            boxplot="{sample}/fastq_stats_phix/{sample}_boxplot.png"
+        params:
+            max_reads=config['fastq_stats']['max_reads']
+        wrapper:
+            "main/wrappers/fastq_stats"
 
 
 
@@ -286,33 +286,23 @@ if manager.config.kraken.do:
     include: sm.modules["kraken/2.0"]
 
 
-# Include the rule graph
-__rulegraph__output = ".sequana/rulegraph.svg"
-__rulegraph__mapper = {
-    "fastqc_raw": "../fastqc_raw.html",
-    "fastqc_phix": "../fastqc_phix.html",
-    "fastqc_trimmed": "../fastqc_trimmed.html",
-    "cutadapt": "../cutadapt.html",
-    "kraken": "../kraken/kraken/kraken.html",
-    "kraken_translate": "../kraken/raken/kraken.html",
-    "kraken_to_krona": "../kraken/kraken/kraken.html",
-}
 
-
-rule rulegraph:
-    input: str(manager.snakefile)
-    output:
-        svg = __rulegraph__output
-    params:
-        mapper = __rulegraph__mapper,
-        configname = "config.yaml"
-    wrapper:
-        "main/wrappers/rulegraph"
+# ====================================================================== rulegraph 
+sequana_rulegraph_mapper = {
+	    "fastqc_raw": "../fastqc_raw.html",
+	    "fastqc_phix": "../fastqc_phix.html",
+	    "fastqc_trimmed": "../fastqc_trimmed.html",
+	    "cutadapt": "../cutadapt.html",
+	    "kraken": "../kraken/kraken/kraken.html",
+	    "kraken_translate": "../kraken/raken/kraken.html",
+	    "kraken_to_krona": "../kraken/kraken/kraken.html",
+	}
+include: sm.modules['rulegraph']
 
 
 
 # create a json file that summarise information of your pipeline
-__summary_pipeline__inputs = __rawdata__input
+__summary_pipeline__inputs = manager.getrawdata()
 if manager.config['cutadapt'].do:
     # todo: handle all adapter removal cases
     __summary_pipeline__outputs = [ __cutadapt__output ]
@@ -327,12 +317,12 @@ if not os.path.exists(".sequana/env.yaml"):
     with open(".sequana/env.yaml", "w") as f:
         f.write("")
 __summary_pipeline__html = []
-__summary_pipeline__rulegraph = __rulegraph__output
+__summary_pipeline__rulegraph = ".sequana/rulegraph.svg"
 __summary_pipeline__requirements = ".sequana/env.yaml"
 __summary_pipeline__snakefile = str(manager.snakefile)
 __summary_pipeline__config = "config.yaml"
 __summary_pipeline__name = "Quality Control"
-__summary_pipeline__json_output = manager.getname("summary_pipeline", ".json")
+__summary_pipeline__json_output = "{sample}/summary_pipeline/{sample}.json"
 include: sm.modules["summary_pipeline"]
 
 
@@ -394,6 +384,7 @@ onsuccess:
 
         # the phix section ---------------------------------
         if manager.config.bwa_mem_phix.do :
+            print(proj)
             phixmod = PhixModule(proj)
             sample_summary["phix_section_json"] = json.loads(phixmod._get_stats().to_json())
             sample_summary["phix_section"] = phixmod._get_summary()
@@ -474,8 +465,6 @@ onsuccess:
     sc = sm.OnSuccessCleaner("quality_control") 
     sc.files_to_remove.append("phiX174.fa")
     sc.add_makefile()
-    # For later
-    #sm.clean_multiqc(__multiqc__output)
 onerror:
     from sequana_pipetools.errors import PipeError
     p = PipeError("quality_control")
