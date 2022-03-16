@@ -1,4 +1,3 @@
-
 #
 #  This file is part of Sequana software
 #
@@ -30,9 +29,12 @@ NAME = "quality_control"
 class Options(argparse.ArgumentParser):
     def __init__(self, prog=NAME, epilog=None):
         usage = col.purple(sequana_prolog.format(**{"name": NAME}))
-        super(Options, self).__init__(usage=usage, prog=prog, description="",
+        super(Options, self).__init__(
+            usage=usage,
+            prog=prog,
+            description="",
             epilog=epilog,
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
 
         # add a new group of options to the parser
@@ -50,15 +52,13 @@ class Options(argparse.ArgumentParser):
         so.add_options(self)
 
         pipeline_group = self.add_argument_group("pipeline")
-        pipeline_group.add_argument("--skip-phix-removal", action="store_true",
-            help="Do no remove the Phix")
-        pipeline_group.add_argument("--skip-fastqc-raw", action="store_true",
-            help="Do not perform fastqc on raw data")
-        pipeline_group.add_argument("--skip-fastqc-cleaned", action="store_true",
-            help="Do not perform fastqc on cleaned data")
+        pipeline_group.add_argument("--skip-phix-removal", action="store_true", help="Do no remove the Phix")
+        pipeline_group.add_argument("--skip-fastqc-raw", action="store_true", help="Do not perform fastqc on raw data")
+        pipeline_group.add_argument(
+            "--skip-fastqc-cleaned", action="store_true", help="Do not perform fastqc on cleaned data"
+        )
 
-
-        so = TrimmingOptions(software=['cutadapt', 'atropos'])
+        so = TrimmingOptions(software=["cutadapt", "atropos"])
         so.software_default = "cutadapt"
         so.add_options(self)
 
@@ -66,8 +66,7 @@ class Options(argparse.ArgumentParser):
         so.add_options(self)
 
         # others
-        self.add_argument("--run", default=False, action="store_true",
-            help="execute the pipeline directly")
+        self.add_argument("--run", default=False, action="store_true", help="execute the pipeline directly")
 
 
 def main(args=None):
@@ -99,9 +98,9 @@ def main(args=None):
         # --------------------------------------------------------- trimming
         cfg.trimming.software_choice = options.trimming_software_choice
         cfg.trimming.do = not options.disable_trimming
-        qual = options.trimming_quality 
+        qual = options.trimming_quality
 
-        if options.trimming_software_choice in ['cutadapt', 'atropos']:
+        if options.trimming_software_choice in ["cutadapt", "atropos"]:
             cfg.cutadapt.tool_choice = options.trimming_software_choice
             cfg.cutadapt.fwd = options.trimming_adapter_read1
             cfg.cutadapt.rev = options.trimming_adapter_read2
@@ -109,7 +108,6 @@ def main(args=None):
             cfg.cutadapt.mode = options.trimming_cutadapt_mode
             cfg.cutadapt.options = options.trimming_cutadapt_options  # trim Ns -O 6
             cfg.cutadapt.quality = 30 if qual == -1 else qual
-
 
         # -------------------------------------------------- bwa section
         cfg.bwa_mem_phix.do = not options.skip_phix_removal
@@ -121,8 +119,7 @@ def main(args=None):
             cfg.kraken.do = True
 
         if options.kraken_databases:
-            cfg.kraken.databases =  [os.path.abspath(x)
-                                     for x in options.kraken_databases]
+            cfg.kraken.databases = [os.path.abspath(x) for x in options.kraken_databases]
         for this in options.kraken_databases:
             manager.exists(this)
 
@@ -132,14 +129,13 @@ def main(args=None):
         if options.skip_fastqc_raw:
             cfg.fastqc.do_raw = False
 
-
     # finalise the command and save it; copy the snakemake. update the config
     # file and save it.
     manager.teardown()
 
-
     if options.run:
-        subprocess.Popen(["sh", '{}.sh'.format(NAME)], cwd=options.workdir)
+        subprocess.Popen(["sh", "{}.sh".format(NAME)], cwd=options.workdir)
+
 
 if __name__ == "__main__":
     main()
