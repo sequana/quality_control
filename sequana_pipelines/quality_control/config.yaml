@@ -9,14 +9,15 @@
 input_directory: /home/cokelaer/Data/Hm2
 input_readtag: _R[12]_
 input_pattern: '*fastq.gz'
+reference_file: phiX174.fa
 
-# if files are required for a pipeline and are within sequana or should
-# be downloaded before the pipeline provide them in this section
-# Note that sequana and url fields are followed by itemised files or links
-# using the front dashes
-requirements:
-    - phiX174.fa
 
+apptainers:
+    pigz: https://zenodo.org/record/7346805/files/pigz_2.4.0.img
+    fastqc: https://zenodo.org/record/7015004/files/fastqc_0.11.9-py3.img
+    bwa: https://zenodo.org/record/7970243/files/bwa_0.7.17.img
+    graphviz: https://zenodo.org/record/7928262/files/graphviz_7.0.5.img
+    sequana_tools: https://zenodo.org/record/7963917/files/sequana_tools_0.15.1.img
 
 #############################################################################
 # BWA used to remove a contaminant
@@ -33,7 +34,6 @@ requirements:
 # - threads: number of threads to be used
 bwa_mem_phix:
     do: true
-    reference_file: phiX174.fa
     index_algorithm: is
     options: -T 30
     threads: 4
@@ -72,7 +72,6 @@ bwa_mem_phix:
 # tool_choice__ = ["atropos", "cutadapt"]
 cutadapt:
     do: true
-    tool_choice: cutadapt
     fwd: ''
     rev: ''
     m: 20
@@ -107,21 +106,6 @@ fastqc:
     do_after_phix_removal: true
     do_after_adapter_removal: true
 
-
-#################################################################
-# For taxonomy. Used in quality_control pipeline
-#
-# :Parameters:
-#
-# - do:    if unchecked, this rule is ignored
-# - kraken_databases: a list of databases (full path)
-#   Please see sequana documentation for details
-#
-kraken:
-    do: false
-    threads: 4
-    databases:
-        - your_full_path_to_valid_kraken_DB
 
 fastq_stats:
     max_reads: 500000
