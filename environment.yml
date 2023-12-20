@@ -1,0 +1,19 @@
+name: mapper
+
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - bwa
+  - samtools
+  - pigz
+  - fastqc
+  - sambamba
+  - pip:
+    - sequana
+    - cutadapt
+    - atropos
+
+
