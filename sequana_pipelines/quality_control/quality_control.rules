@@ -47,9 +47,6 @@ if manager.config.bwa_mem_phix.do:
 if manager.config.fastqc.do_after_adapter_removal:
     expected_output += expand("{sample}/fastqc_trimmed/fastqc.done", sample=manager.samples)
 
-if manager.config.kraken.do:
-    expected_output += expand("{sample}/kraken/kraken/kraken.html", sample=manager.samples)
-    expected_output += expand("{sample}/kraken/kraken/kraken.json", sample=manager.samples)
 
 rule pipeline:
     input: ".sequana/rulegraph.svg",
@@ -66,12 +63,6 @@ if manager.config.cutadapt.tool_choice == "atropos":
                 "to a value greater than one")
         raise Exception
 
-if manager.config.kraken.do is True:
-    if manager.config.kraken.databases in [[], "", None]:
-        print("ERROR: you must provide a kraken database path " +
-              " Check http://sequana.readthedocs.io/en/master/" +
-              "applications.html#sequana-taxonomy")
-        raise Exception
 
 
 # FASTQC on input data set
@@ -87,8 +78,10 @@ if manager.config.fastqc.do_raw:
             config["fastqc"]["threads"]
         log:
             "logs/{sample}/fastqc_raw.log"
+        container:
+            config["apptainers"]["fastqc"]
         wrapper:
-            "main/wrappers/fastqc"
+            f"{manager.wrappers}/wrappers/fastqc"
 
 
 
@@ -108,7 +101,7 @@ rule fastq_stat_samples:
 
 # Do we want to remove the Phix ?
 if manager.config.bwa_mem_phix.do:
-    __copy_ref__input = config["bwa_mem_phix"]["reference_file"]
+    __copy_ref__input = config["reference_file"]
     __copy_ref__output = "reference/" + os.path.basename(__copy_ref__input)
 
     rule copy_reference:
@@ -133,8 +126,10 @@ if manager.config.bwa_mem_phix.do:
             options="",
             index_algorithm='is'
         threads: 2
+        container:
+            config["apptainers"]["sequana_tools"]
         wrapper:
-            "main/wrappers/bwa/build"
+            f"{manager.wrappers}/wrappers/bwa/build"
 
     rule bwa:
         input:
@@ -150,35 +145,70 @@ if manager.config.bwa_mem_phix.do:
             options=config["bwa_mem_phix"]["options"],
             tmp_directory=config["bwa_mem_phix"]["tmp_directory"]
         threads: 2
+        container:
+            config["apptainers"]["sequana_tools"]
         wrapper:
-            "main/wrappers/bwa/align"
+            f"{manager.wrappers}/wrappers/bwa/align"
 
-
-    __bwa_bam_to_fastq__input = "{sample}/bwa/{sample}.sorted.bam"
 
     if manager.paired is True:
-        _params = {"sample": manager.sample}
+        __bwa_bam_to_fastq__fastq_output_gz = [
+            "{sample}/bwa_bam_to_fastq/{sample}_R1_.unmapped.fastq.gz",
+            "{sample}/bwa_bam_to_fastq/{sample}_R1_.mapped.fastq.gz",
+            "{sample}/bwa_bam_to_fastq/{sample}_R2_.unmapped.fastq.gz",
+            "{sample}/bwa_bam_to_fastq/{sample}_R2_.mapped.fastq.gz"]
         __bwa_bam_to_fastq__fastq_output = [
-            "%(sample)s/bwa_bam_to_fastq/%(sample)s_R1_.unmapped.fastq.gz" % _params,
-            "%(sample)s/bwa_bam_to_fastq/%(sample)s_R1_.mapped.fastq.gz" % _params,
-            "%(sample)s/bwa_bam_to_fastq/%(sample)s_R2_.unmapped.fastq.gz" % _params,
-            "%(sample)s/bwa_bam_to_fastq/%(sample)s_R2_.mapped.fastq.gz" % _params]
+            "{sample}/bwa_bam_to_fastq/{sample}_R1_.unmapped.fastq",
+            "{sample}/bwa_bam_to_fastq/{sample}_R1_.mapped.fastq",
+            "{sample}/bwa_bam_to_fastq/{sample}_R2_.unmapped.fastq",
+            "{sample}/bwa_bam_to_fastq/{sample}_R2_.mapped.fastq"]
     else:
+        __bwa_bam_to_fastq__fastq_output_gz = [
+            "{sample}/bwa_bam_to_fastq/{sample}_R1_.unmapped.fastq.gz",
+            "{sample}/bwa_bam_to_fastq/{sample}_R1_.mapped.fastq.gz"]
         __bwa_bam_to_fastq__fastq_output = [
-            "%(sample)s/bwa_bam_to_fastq/%(sample)s_R1_.unmapped.fastq.gz" % {"sample":manager.sample},
-            "%(sample)s/bwa_bam_to_fastq/%(sample)s_R1_.mapped.fastq.gz" % {"sample":manager.sample}]
+            "{sample}/bwa_bam_to_fastq/{sample}_R1_.unmapped.fastq",
+            "{sample}/bwa_bam_to_fastq/{sample}_R1_.mapped.fastq" ]
 
-    __bwa_bam_to_fastq__stats_output = "%s/bwa_bam_to_fastq/bwa_mem_stats.json" % manager.sample
-    __bwa_bam_to_fastq__wkdir = "%s/bwa_bam_to_fastq" % manager.sample
+    __bwa_bam_to_fastq__stats_output = "{sample}/bwa_bam_to_fastq/bwa_mem_stats.json"
+    __bwa_bam_to_fastq__wkdir = "{sample}/bwa_bam_to_fastq"
 
-    include: sm.modules['bwa_bam_to_fastq']
+
+    rule bwa_bam_to_fastq:
+        input:
+            bam="{sample}/bwa/{sample}.sorted.bam"
+        output:
+            fastq=__bwa_bam_to_fastq__fastq_output,
+            stats=__bwa_bam_to_fastq__stats_output
+        params:
+            wkdir = __bwa_bam_to_fastq__wkdir
+        run:
+            # save some stats for later
+            from sequana.tools import StatsBAM2Mapped
+            stats = StatsBAM2Mapped(input["bam"], wkdir=params.wkdir)
+            stats.to_json(output["stats"])
+
+    rule compress_phix:
+        input:
+            fastq=rules.bwa_bam_to_fastq.output.fastq,
+        output:
+            fastq=__bwa_bam_to_fastq__fastq_output_gz,
+        threads:
+            4
+        container:
+            config['apptainers']['pigz']
+        shell:
+            """
+            pigz -p {threads} -f {input.fastq}
+            """
+
 
     # Run a FASTQC on the data without phix
     if manager.config.fastqc.do_after_phix_removal:
-        __fastqc_phix__input_fastq = [x for x in __bwa_bam_to_fastq__fastq_output if "unmapped" not in x]
+        __fastqc_phix__input_fastq = [x for x in __bwa_bam_to_fastq__fastq_output_gz if "unmapped" not in x]
         rule fastqc_phix:
             input: __fastqc_phix__input_fastq
-            output: 
+            output:
                 done="{sample}/fastqc_phix/fastqc.done"
             params:
                 options=config['fastqc']["options"],
@@ -187,13 +217,16 @@ if manager.config.bwa_mem_phix.do:
                 threads= config["fastqc"]["threads"],
             log:
                 "logs/{sample}/fastqc_phix.log"
+            container:
+                config["apptainers"]["fastqc"]
             wrapper:
                 "main/wrappers/fastqc"
 
 
 
     rule fastq_stat_phix:
-        input: __bwa_bam_to_fastq__fastq_output
+        input:
+            rules.compress_phix.output.fastq
         output:
             json="{sample}/fastq_stats_phix/{sample}.json",
             gc="{sample}/fastq_stats_phix/{sample}_gc.png",
@@ -220,7 +253,7 @@ if manager.config['trimming']['do']:
     if adapter_tool in ["cutadapt", "atropos"]:
         adapter_tool = "cutadapt"
         if manager.config.bwa_mem_phix.do:
-            __cutadapt__input_fastq = [x for x in __bwa_bam_to_fastq__fastq_output
+            __cutadapt__input_fastq = [x for x in __bwa_bam_to_fastq__fastq_output_gz
                                        if "unmapped" in x]
             __cutadapt__output = [x.replace("bwa_bam_to_fastq",
                                   "cutadapt").replace("unmapped","cutadapt")
@@ -237,17 +270,130 @@ if manager.config['trimming']['do']:
                 __cutadapt__output = [
                     "{sample}/cutadapt/{sample}_R1_.cutadapt.fastq.gz"]
 
-        __cutadapt__wkdir = "%s/cutadapt" % manager.sample
+        rule cutadapt:
+            input:
+                fastq = __cutadapt__input_fastq
+            output:
+                fastq = __cutadapt__output
+            params:
+                fwd = manager.config.cutadapt.fwd,
+                rev = manager.config.cutadapt.rev,
+                m = config['cutadapt']['m'],   # cutoff
+                quality = config['cutadapt']['quality'],
+                kwargs = manager.config.cutadapt.options,
+                mode = manager.config.cutadapt.mode,
+                wkdir = "{sample}/cutadapt",
+                sample = "{sample}",
+            threads:
+                config['cutadapt']['threads']
+            log: "{sample}/logs/cutadapt/cutadapt.txt"
+            run:
+                executable = config['cutadapt']['tool_choice'] # could be cutadapt or atropos
 
-        # Set the fwd and rev adapters
-        __cutadapt__fwd = manager.config.cutadapt.fwd
-        __cutadapt__rev = manager.config.cutadapt.rev
+                # Fill the fwd and revcomp variables depending on the config file
+                fwd = params.fwd
+                revcomp = params.rev
 
-        __cutadapt__options = manager.config.cutadapt.options
-        __cutadapt__mode = manager.config.cutadapt.mode
-        __cutadapt__log = "%s/logs/cutadapt/cutadapt.txt" % manager.sample
-        __cutadapt__sample = manager.sample
-        include: sm.modules["cutadapt"]
+                # For atropos, output must be txt AND json for the module to work.
+                #
+                # Paired data
+                if len(input.fastq) == 2:
+                    if executable == "atropos":
+                        cmd = "%s trim" % executable
+                        cmd += " -pe1 {input.fastq[0]} -pe2 {input.fastq[1]} "
+                        # atropos requires at least 2 threads
+                        if int(threads) > 1:
+                            cmd += " -T {threads} "
+                        cmd += " --process-timeout 600 "
+                        logpath = log[0].replace(".txt", "")
+                        cmd += " --report-formats json txt --report-file %s" % logpath
+                    else:
+                        cmd = "{}".format(executable)
+                    mode2 = params.mode.upper()
+
+                    if fwd:
+                        cmd += " -{params.mode} %s " % fwd
+                    else:
+                        cmd += " -{params.mode} XXXX "
+
+                    if revcomp:
+                        cmd += " -%s %s " % (mode2, revcomp)
+                    else:
+                        cmd += " -%s XXXX " % mode2
+
+                    cmd += " -m {params.m} -q {params.quality} "
+                    # -o  is common to atropos and cutadapt for the output R1 and -p for
+                    # R2
+                    cmd += " {params.kwargs} -o {output.fastq[0]} -p {output.fastq[1]}"
+
+                    # input of cutdapt must be at the end. earlier version handled
+                    # mixing of optional arguments and positional argument but not
+                    # latest version. In any case, it is safer to do it correctly
+                    # (changes sequana 0.8)
+                    if executable == "cutadapt":
+                        cmd += " {input.fastq[0]} {input.fastq[1]} "
+                    cmd += "> {log}"
+                    shell(cmd)
+                else:
+                    if executable == "atropos":
+                        cmd = "%s trim -se {input.fastq[0]}  " % executable
+                        # atropos requires at least 2 threads
+
+                        if int(threads) > 1:
+                            cmd += " -T {threads} "
+                        cmd += " --process-timeout 600 "
+                        logpath = log[0].replace(".txt", "")
+                        cmd += " --report-formats json txt --report-file %s" % logpath
+                    else:
+                        cmd = "%s" % executable
+
+                    if fwd:
+                        cmd += "    -{params.mode} %s " % fwd
+                    else:
+                        cmd += "    -{params.mode} XXXX "
+                    cmd += " -m {params.m} -q {params.quality} "
+                    cmd += " {params.kwargs} -o {output.fastq[0]}"
+                    if executable == "cutadapt":
+                        cmd += " {input.fastq[0]} "
+                    cmd += " > {log}"
+                    shell(cmd)
+
+    elif adapter_tool in ['fastp']:
+        __clean_fastq__output = ["{sample}/fastp/{sample}_R1_.fastp.fastq.gz"]
+        if manager.paired:
+            __clean_fastq__output += ["{sample}/fastp/{sample}_R2_.fastp.fastq.gz"]
+
+        _quality = config["fastp"].get("quality", 15)
+        _minlen = config["fastp"].get("minimum_length", 20)
+
+        options_fastp = config["fastp"].get("options", "")
+        options_fastp += f" --qualified_quality_phred {_quality}"
+        options_fastp += f" -l {_minlen}"
+        if config["fastp"].get("disable_adapter_trimming", False) is True:
+            options_fastp += "--disable_adapter_trimming"
+        if config["fastp"].get("disable_quality_filtering", False) is True:
+            options_fastp += "--disable_quality_filtering"
+
+        rule fastp:
+            input: 
+                sample=manager.getrawdata()
+            output:
+                trimmed=__clean_fastq__output,
+                html="{sample}/fastp/fastp_{sample}.html",
+                json="{sample}/fastp/fastp_{sample}.json", # must be named fastp
+            log:
+                "logs/fastp/{sample}.log"
+            params:
+                options=config['fastp']["options"],
+                adapters=config["fastp"]["adapters"]
+            threads:
+                config["fastp"].get("threads", 4)
+            resources:
+                **config['fastp']['resources']
+            container:
+                config['apptainers']['fastp']
+            wrapper:
+                f"{manager.wrappers}/wrappers/fastp"
     else:
         raise ValueError("trimming must be either cutadapt or atropos or skewer")
 
@@ -265,39 +411,7 @@ if manager.config['trimming']['do']:
             log:
                 "logs/{sample}/fastqc_trimmed.log"
             wrapper:
-                "main/wrappers/fastqc"
-
-
-if manager.config.kraken.do:
-    if manager.config['cutadapt'].do:
-        # todo: handle all adapter removal cases
-        __kraken__input = __cutadapt__output
-    elif manager.config.bwa_mem_phix.do:
-        __kraken__input = [x for x in __bwa_bam_to_fastq__fastq_output if "unmapped" in x]
-    else:
-        __kraken__input = __data__input
-
-    __kraken__output_wkdir = manager.sample + "/kraken/"
-    __kraken__output_html = __kraken__output_wkdir + "kraken/kraken.html"
-    __kraken__output_out = __kraken__output_wkdir + "kraken/kraken.out"
-    __kraken__output_csv = __kraken__output_wkdir + "kraken/kraken.csv"
-    __kraken__output_json = __kraken__output_wkdir + "kraken/kraken.json"
-
-    include: sm.modules["kraken/2.0"]
-
-
-
-# ====================================================================== rulegraph 
-sequana_rulegraph_mapper = {
-	    "fastqc_raw": "../fastqc_raw.html",
-	    "fastqc_phix": "../fastqc_phix.html",
-	    "fastqc_trimmed": "../fastqc_trimmed.html",
-	    "cutadapt": "../cutadapt.html",
-	    "kraken": "../kraken/kraken/kraken.html",
-	    "kraken_translate": "../kraken/raken/kraken.html",
-	    "kraken_to_krona": "../kraken/kraken/kraken.html",
-	}
-include: sm.modules['rulegraph']
+                f"{manager.wrappers}/wrappers/fastqc"
 
 
 
@@ -307,7 +421,7 @@ if manager.config['cutadapt'].do:
     # todo: handle all adapter removal cases
     __summary_pipeline__outputs = [ __cutadapt__output ]
 elif manager.config.bwa_mem_phix.do:
-    __summary_pipeline__outputs = [x for x in __bwa_bam_to_fastq__fastq_output if "unmapped" in x]
+    __summary_pipeline__outputs = [x for x in __bwa_bam_to_fastq__fastq_output_gz if "unmapped" in x]
 else:
     __summary_pipeline__outputs = []
 
@@ -323,7 +437,72 @@ __summary_pipeline__snakefile = str(manager.snakefile)
 __summary_pipeline__config = "config.yaml"
 __summary_pipeline__name = "Quality Control"
 __summary_pipeline__json_output = "{sample}/summary_pipeline/{sample}.json"
-include: sm.modules["summary_pipeline"]
+ 
+rule summary:
+    input:
+        inputs = __summary_pipeline__inputs,
+        outputs = __summary_pipeline__outputs,
+        html = __summary_pipeline__html,
+        rulegraph = __summary_pipeline__rulegraph,
+        snakefile = __summary_pipeline__snakefile,
+        config = __summary_pipeline__config,
+        requirements = __summary_pipeline__requirements
+    output:
+        json = __summary_pipeline__json_output
+    params:
+        name = __summary_pipeline__name
+    run:
+        import json
+        import os.path
+
+        # use real path
+        inputs = [os.path.realpath(f) for f in input['inputs']]
+        outputs = [os.path.realpath(f) for f in input['outputs']]
+        html = [os.path.realpath(f) for f in input['html']]
+        # create json
+        summary = {'tool': 'sequana_summary',
+                   'inputs': inputs,
+                   'outputs': outputs,
+                   'html': html,
+                   'rulegraph': os.path.realpath(input['rulegraph']),
+                   'requirements': os.path.realpath(input['requirements']),
+                   'snakefile': os.path.realpath(input['snakefile']),
+                   'config': os.path.realpath(input['config']),
+                   'name': params['name']}
+        js = json.dumps(summary, indent=4, sort_keys=True)
+        with open(output['json'], 'w') as fp:
+            fp.write(js)
+
+# ========================================================== rulegraph
+sequana_rulegraph_mapper = {
+	    "fastqc_raw": "../fastqc_raw.html",
+	    "fastqc_phix": "../fastqc_phix.html",
+	    "fastqc_trimmed": "../fastqc_trimmed.html",
+	    "cutadapt": "../cutadapt.html",
+	    "kraken": "../kraken/kraken/kraken.html",
+	    "kraken_translate": "../kraken/raken/kraken.html",
+	    "kraken_to_krona": "../kraken/kraken/kraken.html",
+	}
+rule rulegraph:
+    input: str(manager.snakefile)
+    output:
+        svg = "rulegraph/rulegraph.dot"
+    params:
+        mapper = sequana_rulegraph_mapper,
+        configname = "config.yaml"
+    wrapper:
+        f"{manager.wrappers}/wrappers/rulegraph"
+
+
+rule dot2svg:
+    input:
+        "rulegraph/rulegraph.dot"
+    output:
+        ".sequana/rulegraph.svg"
+    container:
+        config['apptainers']['graphviz']
+    shell:
+        """dot -Tsvg {input} -o {output}"""
 
 
 # Those rules takes a couple of seconds so no need for a cluster
@@ -333,11 +512,11 @@ localrules: rulegraph
 onsuccess:
     from sequana.modules_report.fastq_stats import FastQStatsModule
     from sequana.modules_report.bwa_bam_to_fastq import BWABAMtoFastQModule
-    from sequana.modules_report.kraken import KrakenModule
     from sequana.modules_report.phix import PhixModule
     from sequana.modules_report.cutadapt import CutadaptModule
     from sequana.modules_report.fastqc import FastQCModule
-    from sequana.modules_report.summary import SummaryModule
+    from sequana.modules_report.summary import SequanaReport
+    import json
 
     # the stats image
     #snake_parser = snakemake.get_argument_parser().parse_args()
@@ -384,7 +563,6 @@ onsuccess:
 
         # the phix section ---------------------------------
         if manager.config.bwa_mem_phix.do :
-            print(proj)
             phixmod = PhixModule(proj)
             sample_summary["phix_section_json"] = json.loads(phixmod._get_stats().to_json())
             sample_summary["phix_section"] = phixmod._get_summary()
@@ -410,18 +588,6 @@ onsuccess:
                 "content": html
             })
 
-        # The Kraken section
-        if manager.config.kraken.do:
-            krakenmod = KrakenModule(proj + "/kraken/kraken")
-            sample_summary['kraken_json'] = json.loads(krakenmod._get_stats().to_json())
-            conf.summary_sections.append({
-                "name": "Kraken ",
-                "anchor'": "kraken",
-                "content": krakenmod._get_summary_section()
-            })
-            logger.info("Copying files")
-            shell('cp -r %s/kraken/ %s' % (proj, report_dir))
-
         # The cutadapt report (independent)
         if manager.config['cutadapt'].do:
             from sequana.modules_report.cutadapt import CutadaptModule
@@ -443,14 +609,14 @@ onsuccess:
                     config.get('datatype', "unspecified"),
                     "quality_control",
                      __summary_pipeline__name)
-        SummaryModule(json.loads(open(filename).read()), intro=intro)
+
+        SequanaReport(json.loads(open(filename).read()), intro=intro)
 
         # save sample summary
         sample_summary['project'] = proj
         with open(report_dir + "/summary.json", "w") as fp:
             data = json.dumps(sample_summary, indent=4, sort_keys=True)
             fp.write(data)
-        sm.create_cleanup(proj)
 
     try:
         logger.info("Creating multi summary file")
@@ -461,11 +627,7 @@ onsuccess:
     except Exception as err: 
         print(err)
 
-
-    sc = sm.OnSuccessCleaner("quality_control") 
-    sc.files_to_remove.append("phiX174.fa")
-    sc.add_makefile()
+    manager.teardown()
 onerror:
-    from sequana_pipetools.errors import PipeError
-    p = PipeError("quality_control")
-    p.status()
+    manager.onerror()
+

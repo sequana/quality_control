@@ -1,8 +1,6 @@
 - bwa
 - sambamba
 - samtools
-- kraken2
-- ktImportText
 - fastqc
 - pigz
 - cutadapt

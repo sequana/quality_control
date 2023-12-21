@@ -7,7 +7,7 @@
     :alt: JOSS (journal of open source software) DOI
 
 .. image:: https://github.com/sequana/quality_control/actions/workflows/main.yml/badge.svg
-   :target: https://github.com/sequana/quality_control/actions/workflows    
+   :target: https://github.com/sequana/quality_control/actions/workflows
 
 
 This pipeline is not maintained anymore but should be functional. It is a short-read quality control pipeline
@@ -39,15 +39,15 @@ Usage
 ::
 
     sequana_quality_control --help
-    sequana_quality_control --input-directory DATAPATH 
+    sequana_quality_control --input-directory DATAPATH
 
-This creates a directory with the pipeline and configuration file. You will then need 
+This creates a directory with the pipeline and configuration file. You will then need
 to execute the pipeline::
 
     cd quality_control
     sh quality_control.sh  # for a local run
 
-This launch a snakemake pipeline. If you are familiar with snakemake, you can 
+This launch a snakemake pipeline. If you are familiar with snakemake, you can
 retrieve the pipeline itself and its configuration files and then execute the pipeline yourself with specific parameters::
 
     snakemake -s quality_control.rules -c config.yaml --cores 4 --stats stats.txt
@@ -61,8 +61,6 @@ This pipelines requires the following executable(s):
 
 - fastqc
 - bwa
-- kraken2 (optional)
-- krona (optional)
 - sambamba
 - samtools
 - pigz
@@ -74,7 +72,7 @@ This pipelines requires the following executable(s):
 Details
 ~~~~~~~
 
-This pipeline runs **quality_control** in parallel on the input fastq files (paired or not). 
+This pipeline runs **quality_control** in parallel on the input fastq files (paired or not).
 A brief sequana summary report is also produced.
 
 
@@ -82,7 +80,7 @@ Rules and configuration details
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Here is the `latest documented configuration file <https://raw.githubusercontent.com/sequana/sequana_quality_control/master/sequana_pipelines/quality_control/config.yaml>`_
-to be used with the pipeline. Each rule used in the pipeline may have a section in the configuration file. 
+to be used with the pipeline. Each rule used in the pipeline may have a section in the configuration file.
 
 ChangeLog
 ~~~~~~~~~
@@ -91,9 +89,11 @@ ChangeLog
 ========= ====================================================================
 Version   Description
 ========= ====================================================================
-0.10.0    * add missing MANIFEST 
+0.11.0    * switch to click, pyproject. remove kraken (see multitax pipeline
+            instead)
+0.10.0    * add missing MANIFEST
 0.9.0     * remove design_file for cutadapt to reflect changes in
-            sequana 0.12.0 
+            sequana 0.12.0
           * update kraken rules to use a kraken2 version
           * Update to use new sequana framework (0.12)
           * added CI action
