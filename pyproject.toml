@@ -42,6 +42,7 @@ snakemake = ">=7.32"
 pulp = ">=2.8"
 click = "^8.1.7"
 rich-click = "^1.7.2"
+cutadapt = ">4.6"
 
 [tool.poetry.scripts]
 sequana_quality_control = "sequana_pipelines.quality_control.main:main"
