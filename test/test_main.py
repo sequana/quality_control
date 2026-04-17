@@ -43,7 +43,7 @@ def test_full():
         cmd = cmd.format(sharedir, wk)
         subprocess.call(cmd.split())
 
-        stat = subprocess.call("sh quality_control.sh".split(), cwd=wk)
+        stat = subprocess.call(["bash", "quality_control.sh"], cwd=wk)
 
         assert os.path.exists(wk + "/summary.html")
 

@@ -15,14 +15,11 @@ import shutil
 import sys
 from pathlib import Path
 
-import click_completion
 import rich_click as click
 from sequana_pipetools import SequanaManager
 from sequana_pipetools.options import *
 
 import sequana_pipelines.quality_control.data
-
-click_completion.init()
 
 NAME = "quality_control"
 

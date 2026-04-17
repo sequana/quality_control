@@ -9,6 +9,10 @@
 .. image:: https://github.com/sequana/quality_control/actions/workflows/main.yml/badge.svg
    :target: https://github.com/sequana/quality_control/actions/workflows
 
+.. image:: https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg
+    :target: https://pypi.python.org/pypi/sequana_quality_control
+    :alt: Python 3.11 | 3.12
+
 
 This pipeline is not maintained anymore but should be functional. It is a short-read quality control pipeline
 from the `Sequana <https://sequana.readthedocs.org>`_ project. We would recommend to use the fastqc, demultiplex,

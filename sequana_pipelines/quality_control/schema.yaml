@@ -17,6 +17,9 @@ mapping:
         required: True
         pattern: .*
 
+    "apptainers":
+        type: any
+
     "bwa_mem_phix":
         type: map
         mapping:
