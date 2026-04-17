@@ -87,4 +87,4 @@ jobs:
     # Run tests using Apptainer
     - name: Run Apptainer tests
       run: |
-        sequana_quality_control --input-directory test/data/ --use-apptainer --apptainer-prefix ~/.apptainer/cache && cd quality_control && bash quality_control.sh
+        sequana_quality_control --input-directory test/data/ --apptainer-prefix ~/.apptainer/cache && cd quality_control && bash quality_control.sh

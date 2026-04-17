@@ -17,7 +17,6 @@ apptainers:
     fastqc: https://zenodo.org/record/7015004/files/fastqc_0.11.9-py3.img
     bwa: https://zenodo.org/record/7970243/files/bwa_0.7.17.img
     graphviz: https://zenodo.org/record/7928262/files/graphviz_7.0.5.img
-    sequana_tools: https://zenodo.org/record/18257162/files/sequana_tools_26.1.14.img
 
 #############################################################################
 # BWA used to remove a contaminant

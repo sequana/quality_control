@@ -151,7 +151,7 @@ if manager.config.bwa_mem_phix.do:
             index_algorithm=config["bwa_mem_phix"]["index_algorithm"]
         threads: 2
         container:
-            config["apptainers"]["sequana_tools"]
+            config["apptainers"]["bwa"]
         shell:
             manager.get_shell("bwa/build", "v1")
 
@@ -171,7 +171,7 @@ if manager.config.bwa_mem_phix.do:
         threads:
             config["bwa_mem_phix"]["threads"]
         container:
-            config["apptainers"]["sequana_tools"]
+            config["apptainers"]["bwa"]
         shell:
             manager.get_shell("bwa/align", "v1")
 

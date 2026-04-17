@@ -14,7 +14,7 @@
     :alt: Python 3.11 | 3.12
 
 
-This pipeline is not maintained anymore but should be functional. It is a short-read quality control pipeline
+**This pipeline is not maintained anymore but should be functional**. It is a short-read quality control pipeline
 from the `Sequana <https://sequana.readthedocs.org>`_ project. We would recommend to use the fastqc, demultiplex,
 and multitax pipelines instead.
 
@@ -93,8 +93,8 @@ ChangeLog
 ========= ====================================================================
 Version   Description
 ========= ====================================================================
-0.11.0    * switch to click, pyproject. remove kraken (see multitax pipeline
-            instead)
+1.0.0    * switch to click, pyproject. remove kraken (see multitax pipeline
+            instead). Uses new convention. 
 0.10.0    * add missing MANIFEST
 0.9.0     * remove design_file for cutadapt to reflect changes in
             sequana 0.12.0
