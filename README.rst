@@ -93,7 +93,7 @@ ChangeLog
 ========= ====================================================================
 Version   Description
 ========= ====================================================================
-1.0.0    * switch to click, pyproject. remove kraken (see multitax pipeline
+1.0.0     * switch to click, pyproject. remove kraken (see multitax pipeline
             instead). Uses new convention. 
 0.10.0    * add missing MANIFEST
 0.9.0     * remove design_file for cutadapt to reflect changes in
