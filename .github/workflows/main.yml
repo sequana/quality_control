@@ -17,7 +17,7 @@ jobs:
     strategy:
       max-parallel: 5
       matrix:
-        python: [3.9,'3.10','3.11','3.12']
+        python: ['3.11','3.12']
       fail-fast: false
 
 
@@ -25,16 +25,17 @@ jobs:
 
     - name: install graphviz
       run: |
+        sudo apt-get update -qq
         sudo apt-get install -y graphviz
 
     - name: checkout git repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: conda/mamba
       uses: mamba-org/setup-micromamba@v2
       with:
           environment-file: environment.yml
-          create-args: |
+          create-args: >-
             python=${{ matrix.python }}
           cache-environment: true
           cache-downloads: true
