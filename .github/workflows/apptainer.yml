@@ -1,0 +1,90 @@
+name: Apptainer Run
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+  pull_request:
+    branches-ignore: []
+  schedule:
+    - cron: '0 0 1 * *'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 5
+      matrix:
+        python: ['3.11']
+      fail-fast: false
+
+    steps:
+
+    # Clean up unnecessary preinstalled packages to free disk space
+    - name: Pre-cleanup
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
+    # Cache APT .deb packages
+    - name: Cache APT archives
+      uses: actions/cache@v3
+      with:
+        path: /var/cache/apt/archives
+        key: ${{ runner.os }}-apt-cache-v1
+
+    # Cache Apptainer installation
+    - name: Cache Apptainer install
+      id: cache-apptainer
+      uses: actions/cache@v3
+      with:
+        path: |
+          /usr/bin/apptainer
+          /usr/lib/apptainer
+          /etc/apptainer
+        key: ${{ runner.os }}-apptainer-v1
+
+    # Install Apptainer only if not cached
+    - name: Install Apptainer
+      if: steps.cache-apptainer.outputs.cache-hit != 'true'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y software-properties-common
+        sudo add-apt-repository -y ppa:apptainer/ppa
+        sudo apt-get update
+        sudo apt-get install -y apptainer
+
+    # Cache Apptainer image cache (~/.apptainer/cache)
+    - name: Cache Apptainer images
+      uses: actions/cache@v3
+      with:
+        path: ~/.apptainer/cache
+        key: ${{ runner.os }}-apptainer-images-v1
+
+    # Checkout repository
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    # Set up Python
+    - name: Set up Python ${{ matrix.python }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python }}
+
+    # Install dependencies
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install .[testing]
+
+    # Install package
+    - name: Install package itself
+      run: |
+        pip install .
+
+    # Run tests using Apptainer
+    - name: Run Apptainer tests
+      run: |
+        sequana_quality_control --input-directory test/data/ --apptainer-prefix ~/.apptainer/cache && cd quality_control && bash quality_control.sh

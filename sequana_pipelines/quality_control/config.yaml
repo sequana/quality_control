@@ -15,9 +15,8 @@ reference_file: phiX174.fa
 apptainers:
     pigz: https://zenodo.org/record/7346805/files/pigz_2.4.0.img
     fastqc: https://zenodo.org/record/7015004/files/fastqc_0.11.9-py3.img
-    bwa: https://zenodo.org/record/7970243/files/bwa_0.7.17.img
+    sequana_minimal: https://zenodo.org/record/19127803/files/sequana_minimal_26.3.19.img
     graphviz: https://zenodo.org/record/7928262/files/graphviz_7.0.5.img
-    sequana_tools: https://zenodo.org/record/7963917/files/sequana_tools_0.15.1.img
 
 #############################################################################
 # BWA used to remove a contaminant
@@ -72,6 +71,7 @@ bwa_mem_phix:
 # tool_choice__ = ["atropos", "cutadapt"]
 cutadapt:
     do: true
+    tool_choice: cutadapt
     fwd: ''
     rev: ''
     m: 20

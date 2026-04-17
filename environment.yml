@@ -1,19 +1,17 @@
-name: mapper
-
+name: quality_control
 channels:
-  - conda-forge
-  - bioconda
-  - defaults
-
+- conda-forge
+- bioconda
+- defaults
 dependencies:
-  - bwa
-  - samtools
-  - pigz
-  - fastqc
-  - sambamba
-  - pip:
-    - sequana
-    - cutadapt
-    - atropos
-
-
+- bwa
+- samtools
+- pigz
+- fastqc
+- sambamba
+- graphviz
+- pulp>=2.8
+- pip:
+  - sequana
+  - cutadapt
+  - atropos

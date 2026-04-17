@@ -80,8 +80,8 @@ if manager.config.fastqc.do_raw:
             "logs/{sample}/fastqc_raw.log"
         container:
             config["apptainers"]["fastqc"]
-        wrapper:
-            f"{manager.wrappers}/wrappers/fastqc"
+        shell:
+            manager.get_shell("fastqc/run", "v1")
 
 
 
@@ -94,8 +94,30 @@ rule fastq_stat_samples:
         boxplot="{sample}/fastq_stats_samples/{sample}_boxplot.png"
     params:
         max_reads=config['fastq_stats']['max_reads']
-    wrapper:
-        "main/wrappers/fastq_stats"
+    run:
+        import shutil
+        from pathlib import Path
+        import pylab
+        from sequana import FastQC, sequana_data
+        from sequana_pipetools.snaketools import FileFactory
+
+        pylab.ioff()
+        ff = FileFactory(input[0])
+        for filename in ff.realpaths:
+            fastq = FastQC(filename, max_sample=params.max_reads)
+            if len(fastq.fastq) != 0:
+                pylab.clf()
+                fastq.boxplot_quality()
+                pylab.savefig(output.boxplot)
+                pylab.clf()
+                fastq.histogram_gc_content()
+                pylab.savefig(output.gc)
+                fastq.get_stats().to_json(output.json)
+            else:
+                location = sequana_data("no_data.jpg", "images")
+                shutil.copy(location, output.gc)
+                shutil.copy(location, output.boxplot)
+                Path(output.json).touch()
 
 
 
@@ -108,9 +130,11 @@ if manager.config.bwa_mem_phix.do:
         input: __copy_ref__input
         output:
             ref=__copy_ref__output,
+        log:
+            "reference/copy_reference.log"
         shell:
             """
-            cp {input} {output.ref}
+            cp {input} {output.ref} >{log} 2>&1
             """
 
     # Mapping input / output
@@ -124,12 +148,12 @@ if manager.config.bwa_mem_phix.do:
             "reference/build.log"
         params:
             options="",
-            index_algorithm='is'
+            index_algorithm=config["bwa_mem_phix"]["index_algorithm"]
         threads: 2
         container:
-            config["apptainers"]["sequana_tools"]
-        wrapper:
-            f"{manager.wrappers}/wrappers/bwa/build"
+            config["apptainers"]["sequana_minimal"]
+        shell:
+            manager.get_shell("bwa/build", "v1")
 
     rule bwa:
         input:
@@ -144,11 +168,12 @@ if manager.config.bwa_mem_phix.do:
         params:
             options=config["bwa_mem_phix"]["options"],
             tmp_directory=config["bwa_mem_phix"]["tmp_directory"]
-        threads: 2
+        threads:
+            config["bwa_mem_phix"]["threads"]
         container:
-            config["apptainers"]["sequana_tools"]
-        wrapper:
-            f"{manager.wrappers}/wrappers/bwa/align"
+            config["apptainers"]["sequana_minimal"]
+        shell:
+            manager.get_shell("bwa/align", "v1")
 
 
     if manager.paired is True:
@@ -193,13 +218,15 @@ if manager.config.bwa_mem_phix.do:
             fastq=rules.bwa_bam_to_fastq.output.fastq,
         output:
             fastq=__bwa_bam_to_fastq__fastq_output_gz,
+        log:
+            "{sample}/bwa_bam_to_fastq/compress_phix.log"
         threads:
             4
         container:
             config['apptainers']['pigz']
         shell:
             """
-            pigz -p {threads} -f {input.fastq}
+            pigz -p {threads} -f {input.fastq} >{log} 2>&1
             """
 
 
@@ -214,13 +241,13 @@ if manager.config.bwa_mem_phix.do:
                 options=config['fastqc']["options"],
                 working_directory="{sample}/fastqc_phix"
             threads:
-                threads= config["fastqc"]["threads"],
+                config["fastqc"]["threads"]
             log:
                 "logs/{sample}/fastqc_phix.log"
             container:
                 config["apptainers"]["fastqc"]
-            wrapper:
-                "main/wrappers/fastqc"
+            shell:
+                manager.get_shell("fastqc/run", "v1")
 
 
 
@@ -233,8 +260,30 @@ if manager.config.bwa_mem_phix.do:
             boxplot="{sample}/fastq_stats_phix/{sample}_boxplot.png"
         params:
             max_reads=config['fastq_stats']['max_reads']
-        wrapper:
-            "main/wrappers/fastq_stats"
+        run:
+            import shutil
+            from pathlib import Path
+            import pylab
+            from sequana import FastQC, sequana_data
+            from sequana_pipetools.snaketools import FileFactory
+
+            pylab.ioff()
+            ff = FileFactory(input[0])
+            for filename in ff.realpaths:
+                fastq = FastQC(filename, max_sample=params.max_reads)
+                if len(fastq.fastq) != 0:
+                    pylab.clf()
+                    fastq.boxplot_quality()
+                    pylab.savefig(output.boxplot)
+                    pylab.clf()
+                    fastq.histogram_gc_content()
+                    pylab.savefig(output.gc)
+                    fastq.get_stats().to_json(output.json)
+                else:
+                    location = sequana_data("no_data.jpg", "images")
+                    shutil.copy(location, output.gc)
+                    shutil.copy(location, output.boxplot)
+                    Path(output.json).touch()
 
 
 
@@ -359,43 +408,47 @@ if manager.config['trimming']['do']:
                     shell(cmd)
 
     elif adapter_tool in ['fastp']:
-        __clean_fastq__output = ["{sample}/fastp/{sample}_R1_.fastp.fastq.gz"]
         if manager.paired:
-            __clean_fastq__output += ["{sample}/fastp/{sample}_R2_.fastp.fastq.gz"]
-
-        _quality = config["fastp"].get("quality", 15)
-        _minlen = config["fastp"].get("minimum_length", 20)
-
-        options_fastp = config["fastp"].get("options", "")
-        options_fastp += f" --qualified_quality_phred {_quality}"
-        options_fastp += f" -l {_minlen}"
-        if config["fastp"].get("disable_adapter_trimming", False) is True:
-            options_fastp += "--disable_adapter_trimming"
-        if config["fastp"].get("disable_quality_filtering", False) is True:
-            options_fastp += "--disable_quality_filtering"
-
-        rule fastp:
-            input: 
-                sample=manager.getrawdata()
-            output:
-                trimmed=__clean_fastq__output,
-                html="{sample}/fastp/fastp_{sample}.html",
-                json="{sample}/fastp/fastp_{sample}.json", # must be named fastp
-            log:
-                "logs/fastp/{sample}.log"
-            params:
-                options=config['fastp']["options"],
-                adapters=config["fastp"]["adapters"]
-            threads:
-                config["fastp"].get("threads", 4)
-            resources:
-                **config['fastp']['resources']
-            container:
-                config['apptainers']['fastp']
-            wrapper:
-                f"{manager.wrappers}/wrappers/fastp"
+            rule fastp:
+                input:
+                    fastq=manager.getrawdata()
+                output:
+                    r1="{sample}/fastp/{sample}_R1_.fastp.fastq.gz",
+                    r2="{sample}/fastp/{sample}_R2_.fastp.fastq.gz",
+                    html="{sample}/fastp/fastp_{sample}.html",
+                    json="{sample}/fastp/fastp_{sample}.json",
+                log:
+                    "logs/fastp/{sample}.log"
+                params:
+                    options=config['fastp']["options"],
+                    adapters=config["fastp"]["adapters"]
+                threads:
+                    config["fastp"].get("threads", 4)
+                container:
+                    config['apptainers']['fastp']
+                shell:
+                    manager.get_shell("fastp/run", "v1")
+        else:
+            rule fastp:
+                input:
+                    fastq=manager.getrawdata()
+                output:
+                    r1="{sample}/fastp/{sample}_R1_.fastp.fastq.gz",
+                    html="{sample}/fastp/fastp_{sample}.html",
+                    json="{sample}/fastp/fastp_{sample}.json",
+                log:
+                    "logs/fastp/{sample}.log"
+                params:
+                    options=config['fastp']["options"],
+                    adapters=config["fastp"]["adapters"]
+                threads:
+                    config["fastp"].get("threads", 4)
+                container:
+                    config['apptainers']['fastp']
+                shell:
+                    manager.get_shell("fastp/run", "v1")
     else:
-        raise ValueError("trimming must be either cutadapt or atropos or skewer")
+        raise ValueError("trimming must be either cutadapt or atropos or fastp")
 
     # Now we can perform again a FastQC and FastQ stats
     if manager.config.fastqc.do_after_adapter_removal:
@@ -405,13 +458,15 @@ if manager.config['trimming']['do']:
                 done="{sample}/fastqc_trimmed/fastqc.done"
             params:
                 options=config['fastqc']["options"],
-                working_directory="{sample}/fastqc_phix"
+                working_directory="{sample}/fastqc_trimmed"
             threads:
                 config["fastqc"]["threads"]
             log:
                 "logs/{sample}/fastqc_trimmed.log"
-            wrapper:
-                f"{manager.wrappers}/wrappers/fastqc"
+            container:
+                config["apptainers"]["fastqc"]
+            shell:
+                manager.get_shell("fastqc/run", "v1")
 
 
 
@@ -486,12 +541,13 @@ sequana_rulegraph_mapper = {
 rule rulegraph:
     input: str(manager.snakefile)
     output:
-        svg = "rulegraph/rulegraph.dot"
+        "rulegraph/rulegraph.dot"
     params:
         mapper = sequana_rulegraph_mapper,
-        configname = "config.yaml"
-    wrapper:
-        f"{manager.wrappers}/wrappers/rulegraph"
+        configname = "config.yaml",
+        required_local_files = [config["reference_file"]] if manager.config.bwa_mem_phix.do else []
+    run:
+        manager.get_run("rulegraph/run", "v1")(input, output, params)
 
 
 rule dot2svg:
@@ -502,11 +558,11 @@ rule dot2svg:
     container:
         config['apptainers']['graphviz']
     shell:
-        """dot -Tsvg {input} -o {output}"""
+        manager.get_shell("graphviz/dot2svg", "v1")
 
 
 # Those rules takes a couple of seconds so no need for a cluster
-localrules: rulegraph
+localrules: rulegraph, dot2svg
 
 
 onsuccess:
