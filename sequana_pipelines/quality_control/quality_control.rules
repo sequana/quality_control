@@ -613,7 +613,7 @@ onsuccess:
         conf.summary_sections.append({
             "name": "Stats (input data)",
             "title_links": '<a href="fastqc_raw.html">FastQC</a>',
-            "anchor'": "stats",
+            "anchor": "stats",
             "content": fqmod._get_stats_section()
         })
 
@@ -625,7 +625,7 @@ onsuccess:
             conf.summary_sections.append({
                 "name": "Phix ",
                 "title_links": '<a href="fastqc_phix.html">FastQC</a>',
-                "anchor'": "phix",
+                "anchor": "phix",
                 "content": phixmod._get_html()
             })
 
@@ -640,7 +640,7 @@ onsuccess:
                 "name": "Adapter ",
                 "title_links": '<a href="fastqc_cutadapt.html">FastQC</a>|' +
                     '<a href="cutadapt.html">Cutadapt</a>|',
-                "anchor'": "phix",
+                "anchor": "adapter",
                 "content": html
             })
 
