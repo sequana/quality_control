@@ -16,12 +16,9 @@ sharedir = f"{test_dir}/data"
 
 
 def test_standalone_subprocess():
-    directory = tempfile.TemporaryDirectory()
-    cmd = """sequana_quality_control --input-directory {}
-          --working-directory --force""".format(
-        sharedir, directory.name
-    )
-    subprocess.call(cmd.split())
+    with tempfile.TemporaryDirectory() as directory:
+        cmd = f"sequana_quality_control --input-directory {sharedir} --working-directory {directory} --force"
+        assert subprocess.call(cmd.split()) == 0
 
 
 def test_standalone_script():
@@ -51,3 +48,29 @@ def test_full():
 def test_version():
     cmd = "sequana_quality_control --version"
     subprocess.call(cmd.split())
+
+
+def dryrun(*args):
+    """Build the workflow with the given options and check that its DAG is valid"""
+    with tempfile.TemporaryDirectory() as directory:
+        cmd = ["sequana_quality_control", "--input-directory", sharedir, "--working-directory", directory, "--force"]
+        assert subprocess.call(cmd + list(args)) == 0
+
+        cmd = ["snakemake", "-s", "quality_control.rules", "--configfile", "config.yaml", "-n"]
+        assert subprocess.call(cmd, cwd=directory) == 0
+
+
+def test_skip_phix_removal():
+    dryrun("--skip-phix-removal")
+
+
+def test_disable_trimming():
+    dryrun("--disable-trimming")
+
+
+def test_skip_phix_removal_and_trimming():
+    dryrun("--skip-phix-removal", "--disable-trimming")
+
+
+def test_skip_fastqc():
+    dryrun("--skip-fastqc-raw", "--skip-fastqc-cleaned")

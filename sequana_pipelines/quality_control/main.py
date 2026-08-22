@@ -64,6 +64,8 @@ def main(**options):
     # --------------------------------------------------------- trimming
     cfg.trimming.software_choice = options.trimming_software_choice
     cfg.trimming.do = not options.disable_trimming
+    # the cutadapt section is the one used by the trimming rules
+    cfg.cutadapt.do = cfg.trimming.do
     qual = options.trimming_quality
 
     if options.trimming_software_choice in ["cutadapt", "atropos"]:

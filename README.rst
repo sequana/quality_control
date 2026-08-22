@@ -93,6 +93,13 @@ ChangeLog
 ========= ====================================================================
 Version   Description
 ========= ====================================================================
+1.2.0     * fix --skip-phix-removal and --disable-trimming, which both ended
+            in a NameError
+          * compute the FastQ statistics of R2 as well (R1 only before)
+          * the adapter section of the report shows the trimmed data (it was
+            showing the phix data) and links the FastQC reports that exist
+          * do not hide a failure of the final summary.html anymore
+          * remove the dead fastp rules and the kraken entries of the rulegraph
 1.0.0     * switch to click, pyproject. remove kraken (see multitax pipeline
             instead). Uses new convention. 
 0.10.0    * add missing MANIFEST
