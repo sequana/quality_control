@@ -12,16 +12,9 @@
 ##############################################################################
 import glob
 import os
-import shutil
-import subprocess
-
-
-# Some sequana related tools
-import sequana
-
+import sys
 
 from sequana_pipetools import PipelineManager
-from sequana_pipetools import snaketools as sm
 
 # This must be defined before the include
 configfile: "config.yaml"
@@ -30,22 +23,68 @@ configfile: "config.yaml"
 manager = PipelineManager("quality_control", config)
 
 
+# the statistics and plots are computed for each read (R1 and, if paired, R2)
+read_tags = ["_R1_", "_R2_"] if manager.paired else ["_R1_"]
+
+
+def fastq_stats_output(directory):
+    """Expected json/png files of a fastq_stat rule (one set per read)"""
+    return {
+        "json": [f"{{sample}}/{directory}/{{sample}}{tag}.json" for tag in read_tags],
+        "gc": [f"{{sample}}/{directory}/{{sample}}{tag}_gc.png" for tag in read_tags],
+        "boxplot": [f"{{sample}}/{directory}/{{sample}}{tag}_boxplot.png" for tag in read_tags],
+    }
+
+
+def compute_fastq_stats(fastqs, output, max_reads):
+    """Compute the sequana statistics and plots of each input FastQ file"""
+    import shutil
+    from pathlib import Path
+
+    import pylab
+    from sequana import FastQC, sequana_data
+
+    pylab.ioff()
+    for filename, json_file, gc_file, boxplot_file in zip(fastqs, output.json, output.gc, output.boxplot):
+        fastq = FastQC(filename, max_sample=max_reads)
+        if len(fastq.fastq) != 0:
+            pylab.clf()
+            fastq.boxplot_quality()
+            pylab.savefig(boxplot_file)
+            pylab.clf()
+            fastq.histogram_gc_content()
+            pylab.savefig(gc_file)
+            fastq.get_stats().to_json(json_file)
+        else:
+            location = sequana_data("no_data.jpg", "images")
+            shutil.copy(location, gc_file)
+            shutil.copy(location, boxplot_file)
+            Path(json_file).touch()
+
+
+__fastq_stats_samples__output = fastq_stats_output("fastq_stats_samples")
+__fastq_stats_phix__output = fastq_stats_output("fastq_stats_phix")
+__fastq_stats_trimmed__output = fastq_stats_output("fastq_stats_trimmed")
+
+
 expected_output = []
 
-# stats on raw data and optional fastac
-expected_output += expand("{sample}/fastq_stats_samples/{sample}.json", sample=manager.samples)
+# stats on raw data and optional fastqc
+expected_output += expand(__fastq_stats_samples__output["json"], sample=manager.samples)
 if manager.config.fastqc.do_raw:
     expected_output += expand("{sample}/fastqc_raw/fastqc.done", sample=manager.samples)
 
 # if we remove the phix
 if manager.config.bwa_mem_phix.do:
-    expected_output += expand("{sample}/fastq_stats_phix/{sample}.json", sample=manager.samples)
+    expected_output += expand(__fastq_stats_phix__output["json"], sample=manager.samples)
     if manager.config.fastqc.do_after_phix_removal:
         expected_output += expand("{sample}/fastqc_phix/fastqc.done", sample=manager.samples)
 
-
-if manager.config.fastqc.do_after_adapter_removal:
-    expected_output += expand("{sample}/fastqc_trimmed/fastqc.done", sample=manager.samples)
+# the trimming outputs only exist if the trimming was performed
+if manager.config.trimming.do:
+    expected_output += expand(__fastq_stats_trimmed__output["json"], sample=manager.samples)
+    if manager.config.fastqc.do_after_adapter_removal:
+        expected_output += expand("{sample}/fastqc_trimmed/fastqc.done", sample=manager.samples)
 
 
 rule pipeline:
@@ -87,37 +126,16 @@ if manager.config.fastqc.do_raw:
 
 # FASTQ stats on input data set
 rule fastq_stat_samples:
-    input: manager.getrawdata()
+    input:
+        fastq=manager.getrawdata()
     output:
-        json="{sample}/fastq_stats_samples/{sample}.json",
-        gc="{sample}/fastq_stats_samples/{sample}_gc.png",
-        boxplot="{sample}/fastq_stats_samples/{sample}_boxplot.png"
+        json=__fastq_stats_samples__output["json"],
+        gc=__fastq_stats_samples__output["gc"],
+        boxplot=__fastq_stats_samples__output["boxplot"]
     params:
         max_reads=config['fastq_stats']['max_reads']
     run:
-        import shutil
-        from pathlib import Path
-        import pylab
-        from sequana import FastQC, sequana_data
-        from sequana_pipetools.snaketools import FileFactory
-
-        pylab.ioff()
-        ff = FileFactory(input[0])
-        for filename in ff.realpaths:
-            fastq = FastQC(filename, max_sample=params.max_reads)
-            if len(fastq.fastq) != 0:
-                pylab.clf()
-                fastq.boxplot_quality()
-                pylab.savefig(output.boxplot)
-                pylab.clf()
-                fastq.histogram_gc_content()
-                pylab.savefig(output.gc)
-                fastq.get_stats().to_json(output.json)
-            else:
-                location = sequana_data("no_data.jpg", "images")
-                shutil.copy(location, output.gc)
-                shutil.copy(location, output.boxplot)
-                Path(output.json).touch()
+        compute_fastq_stats(input.fastq, output, params.max_reads)
 
 
 
@@ -253,44 +271,22 @@ if manager.config.bwa_mem_phix.do:
 
     rule fastq_stat_phix:
         input:
-            rules.compress_phix.output.fastq
+            # the unmapped reads are the ones kept after the phix removal
+            fastq=[x for x in __bwa_bam_to_fastq__fastq_output_gz if "unmapped" in x]
         output:
-            json="{sample}/fastq_stats_phix/{sample}.json",
-            gc="{sample}/fastq_stats_phix/{sample}_gc.png",
-            boxplot="{sample}/fastq_stats_phix/{sample}_boxplot.png"
+            json=__fastq_stats_phix__output["json"],
+            gc=__fastq_stats_phix__output["gc"],
+            boxplot=__fastq_stats_phix__output["boxplot"]
         params:
             max_reads=config['fastq_stats']['max_reads']
         run:
-            import shutil
-            from pathlib import Path
-            import pylab
-            from sequana import FastQC, sequana_data
-            from sequana_pipetools.snaketools import FileFactory
-
-            pylab.ioff()
-            ff = FileFactory(input[0])
-            for filename in ff.realpaths:
-                fastq = FastQC(filename, max_sample=params.max_reads)
-                if len(fastq.fastq) != 0:
-                    pylab.clf()
-                    fastq.boxplot_quality()
-                    pylab.savefig(output.boxplot)
-                    pylab.clf()
-                    fastq.histogram_gc_content()
-                    pylab.savefig(output.gc)
-                    fastq.get_stats().to_json(output.json)
-                else:
-                    location = sequana_data("no_data.jpg", "images")
-                    shutil.copy(location, output.gc)
-                    shutil.copy(location, output.boxplot)
-                    Path(output.json).touch()
+            compute_fastq_stats(input.fastq, output, params.max_reads)
 
 
 
 valid_trimmer = ['cutadapt', 'atropos']
 if manager.config.trimming.software_choice not in valid_trimmer:
-    print(f"Invalid choice for trimming tool. Choose one in {valid_trimmer}")
-    sys.exit(1)
+    sys.exit(f"Invalid choice for trimming tool. Choose one in {valid_trimmer}")
 
 # Perform the adapter removal and trimming
 if manager.config['trimming']['do']:
@@ -308,9 +304,9 @@ if manager.config['trimming']['do']:
                                   "cutadapt").replace("unmapped","cutadapt")
                                   for x in __cutadapt__input_fastq]
         else:
-            # If the fix is not yet performed, __data__input is a wildcard
-            # function so the output must be specified by hand
-            __cutadapt__input_fastq = __data__input
+            # the phix removal is skipped so the raw data is trimmed directly.
+            # getrawdata() is a wildcard function, hence the explicit output
+            __cutadapt__input_fastq = manager.getrawdata()
             if manager.paired:
                 __cutadapt__output = [
                     "{sample}/cutadapt/{sample}_R1_.cutadapt.fastq.gz",
@@ -407,48 +403,21 @@ if manager.config['trimming']['do']:
                     cmd += " > {log}"
                     shell(cmd)
 
-    elif adapter_tool in ['fastp']:
-        if manager.paired:
-            rule fastp:
-                input:
-                    fastq=manager.getrawdata()
-                output:
-                    r1="{sample}/fastp/{sample}_R1_.fastp.fastq.gz",
-                    r2="{sample}/fastp/{sample}_R2_.fastp.fastq.gz",
-                    html="{sample}/fastp/fastp_{sample}.html",
-                    json="{sample}/fastp/fastp_{sample}.json",
-                log:
-                    "logs/fastp/{sample}.log"
-                params:
-                    options=config['fastp']["options"],
-                    adapters=config["fastp"]["adapters"]
-                threads:
-                    config["fastp"].get("threads", 4)
-                container:
-                    config['apptainers']['fastp']
-                shell:
-                    manager.get_shell("fastp/run", "v1")
-        else:
-            rule fastp:
-                input:
-                    fastq=manager.getrawdata()
-                output:
-                    r1="{sample}/fastp/{sample}_R1_.fastp.fastq.gz",
-                    html="{sample}/fastp/fastp_{sample}.html",
-                    json="{sample}/fastp/fastp_{sample}.json",
-                log:
-                    "logs/fastp/{sample}.log"
-                params:
-                    options=config['fastp']["options"],
-                    adapters=config["fastp"]["adapters"]
-                threads:
-                    config["fastp"].get("threads", 4)
-                container:
-                    config['apptainers']['fastp']
-                shell:
-                    manager.get_shell("fastp/run", "v1")
     else:
-        raise ValueError("trimming must be either cutadapt or atropos or fastp")
+        raise ValueError(f"trimming must be one of {valid_trimmer}")
+
+    rule fastq_stat_trimmed:
+        input:
+            fastq=__cutadapt__output
+        output:
+            json=__fastq_stats_trimmed__output["json"],
+            gc=__fastq_stats_trimmed__output["gc"],
+            boxplot=__fastq_stats_trimmed__output["boxplot"]
+        params:
+            max_reads=config['fastq_stats']['max_reads']
+        run:
+            compute_fastq_stats(input.fastq, output, params.max_reads)
+
 
     # Now we can perform again a FastQC and FastQ stats
     if manager.config.fastqc.do_after_adapter_removal:
@@ -472,8 +441,7 @@ if manager.config['trimming']['do']:
 
 # create a json file that summarise information of your pipeline
 __summary_pipeline__inputs = manager.getrawdata()
-if manager.config['cutadapt'].do:
-    # todo: handle all adapter removal cases
+if manager.config.trimming.do:
     __summary_pipeline__outputs = [ __cutadapt__output ]
 elif manager.config.bwa_mem_phix.do:
     __summary_pipeline__outputs = [x for x in __bwa_bam_to_fastq__fastq_output_gz if "unmapped" in x]
@@ -490,7 +458,7 @@ __summary_pipeline__rulegraph = ".sequana/rulegraph.svg"
 __summary_pipeline__requirements = ".sequana/env.yaml"
 __summary_pipeline__snakefile = str(manager.snakefile)
 __summary_pipeline__config = "config.yaml"
-__summary_pipeline__name = "Quality Control"
+__summary_pipeline__name = "quality_control"
 __summary_pipeline__json_output = "{sample}/summary_pipeline/{sample}.json"
  
 rule summary:
@@ -530,14 +498,11 @@ rule summary:
 
 # ========================================================== rulegraph
 sequana_rulegraph_mapper = {
-	    "fastqc_raw": "../fastqc_raw.html",
-	    "fastqc_phix": "../fastqc_phix.html",
-	    "fastqc_trimmed": "../fastqc_trimmed.html",
-	    "cutadapt": "../cutadapt.html",
-	    "kraken": "../kraken/kraken/kraken.html",
-	    "kraken_translate": "../kraken/raken/kraken.html",
-	    "kraken_to_krona": "../kraken/kraken/kraken.html",
-	}
+    "fastqc_samples": "../fastqc_raw.html",
+    "fastqc_phix": "../fastqc_phix.html",
+    "fastqc_trimmed": "../fastqc_trimmed.html",
+    "cutadapt": "../cutadapt.html",
+}
 rule rulegraph:
     input: str(manager.snakefile)
     output:
@@ -596,10 +561,11 @@ onsuccess:
         report_dir = report_dir_format % {"proj": proj}
         conf.output_dir = report_dir   # ensure files are stored in the correct location
 
-        # Create the 3 FastQC HTML files (independent)
+        # Create the FastQC HTML files (independent)
         for this in ["fastqc_phix", "fastqc_raw", "fastqc_trimmed"]:
-            FastQCModule("{}.html".format(this),
-                         proj + "/{}/*_fastqc.html".format(this))
+            if glob.glob(proj + "/{}/*_fastqc.html".format(this)):
+                FastQCModule("{}.html".format(this),
+                             proj + "/{}/*_fastqc.html".format(this))
 
         # add all sections in addition to standard summary
         conf.summary_sections = []
@@ -622,30 +588,33 @@ onsuccess:
             phixmod = PhixModule(proj)
             sample_summary["phix_section_json"] = json.loads(phixmod._get_stats().to_json())
             sample_summary["phix_section"] = phixmod._get_summary()
+            html = phixmod._get_html()
+            html += FastQStatsModule(proj + "/fastq_stats_phix", "fastqc_phix")._get_stats_section(
+                tablename="phix2")
             conf.summary_sections.append({
-                "name": "Phix ",
+                "name": "Phix",
                 "title_links": '<a href="fastqc_phix.html">FastQC</a>',
                 "anchor": "phix",
-                "content": phixmod._get_html()
+                "content": html
             })
 
         # the cutadapt section ----------------------------
-        if manager.config.cutadapt.do:
+        if manager.config.trimming.do:
             cutadapt_mod = CutadaptModule(f"{proj}/logs/cutadapt/cutadapt.txt", proj)
             sample_summary["cutadapt_json"] = json.loads(cutadapt_mod._get_stats().to_json())
             html = cutadapt_mod._get_stat_section()
-            html += FastQStatsModule(proj + "/fastq_stats_phix", "fastqc_cutadapt")._get_stats_section(
-                tablename="cutadapt2")
+            html += FastQStatsModule(proj + "/fastq_stats_trimmed", "fastqc_trimmed")._get_stats_section(
+                tablename="trimmed")
             conf.summary_sections.append({
-                "name": "Adapter ",
-                "title_links": '<a href="fastqc_cutadapt.html">FastQC</a>|' +
-                    '<a href="cutadapt.html">Cutadapt</a>|',
+                "name": "Adapter",
+                "title_links": '<a href="fastqc_trimmed.html">FastQC</a> | '
+                    '<a href="cutadapt.html">Cutadapt</a>',
                 "anchor": "adapter",
                 "content": html
             })
 
         # The cutadapt report (independent)
-        if manager.config['cutadapt'].do:
+        if manager.config.trimming.do:
             from sequana.modules_report.cutadapt import CutadaptModule
             filename = proj + "/logs/cutadapt/cutadapt.txt"
             CutadaptModule(filename, proj, "cutadapt.html")
@@ -666,7 +635,8 @@ onsuccess:
                     "quality_control",
                      __summary_pipeline__name)
 
-        SequanaReport(json.loads(open(filename).read()), intro=intro)
+        with open(filename, "r") as fin:
+            SequanaReport(json.loads(fin.read()), intro=intro)
 
         # save sample summary
         sample_summary['project'] = proj
@@ -674,14 +644,12 @@ onsuccess:
             data = json.dumps(sample_summary, indent=4, sort_keys=True)
             fp.write(data)
 
-    try:
-        logger.info("Creating multi summary file")
-        from sequana.modules_report.multi_summary import MultiSummary
-        from sequana.utils import config as cfg
-        cfg.output_dir = "."
-        sms = MultiSummary(pattern="**/report_qc*/summary.json", output_filename="summary.html")
-    except Exception as err: 
-        print(err)
+    logger.info("Creating multi summary file")
+    from sequana.modules_report.multi_summary import MultiSummary
+    from sequana.utils import config as cfg
+
+    cfg.output_dir = "."
+    MultiSummary(pattern="**/report_qc*/summary.json", output_filename="summary.html")
 
     manager.teardown()
 onerror:
