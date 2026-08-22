@@ -442,7 +442,7 @@ if manager.config['trimming']['do']:
 # create a json file that summarise information of your pipeline
 __summary_pipeline__inputs = manager.getrawdata()
 if manager.config.trimming.do:
-    __summary_pipeline__outputs = [ __cutadapt__output ]
+    __summary_pipeline__outputs = __cutadapt__output
 elif manager.config.bwa_mem_phix.do:
     __summary_pipeline__outputs = [x for x in __bwa_bam_to_fastq__fastq_output_gz if "unmapped" in x]
 else:
