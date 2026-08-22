@@ -93,6 +93,12 @@ ChangeLog
 ========= ====================================================================
 Version   Description
 ========= ====================================================================
+1.3.0     * add a multiqc report aggregating the FastQC and cutadapt results
+          * the trimming is now a shell rule running in the cutadapt
+            container (it was a python rule using the local installation)
+          * add the missing log files so that the pipeline monitor reports
+            the correct elapsed times
+          * require sequana >=0.24.1
 1.2.0     * fix --skip-phix-removal and --disable-trimming, which both ended
             in a NameError
           * compute the FastQ statistics of R2 as well (R1 only before)

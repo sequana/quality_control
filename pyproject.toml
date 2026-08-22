@@ -4,13 +4,13 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "sequana-quality-control"
-version = "1.2.0"
+version = "1.3.0"
 description = "Quality control pipeline for NGS data (phix removal, adapter trimming, FastQC)"
 authors = ["Sequana Team"]
 license = "BSD-3"
 repository = "https://github.com/sequana/quality_control"
 readme = "README.rst"
-keywords = ["snakemake", "NGS", "sequana", "fastqc", "cutadapt"]
+keywords = ["snakemake", "NGS", "sequana", "fastqc", "cutadapt", "multiqc"]
 classifiers = [
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Education",
@@ -35,7 +35,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = ">=3.9,<4.0"
-sequana = ">=0.18.0"
+sequana = ">=0.24.1"
 sequana_pipetools = ">=1.1.1"
 sequana-wrappers = ">=26.4.16"
 snakemake = ">=7.32"
