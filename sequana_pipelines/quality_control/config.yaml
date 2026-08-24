@@ -13,6 +13,8 @@ reference_file: phiX174.fa
 
 
 apptainers:
+    cutadapt: https://zenodo.org/record/18834062/files/cutadapt_4.6.0.img
+    multiqc: https://zenodo.org/record/10155626/files/multiqc_1.17.0.img
     pigz: https://zenodo.org/record/7346805/files/pigz_2.4.0.img
     fastqc: https://zenodo.org/record/7015004/files/fastqc_0.11.9-py3.img
     sequana_minimal: https://zenodo.org/record/19127803/files/sequana_minimal_26.3.19.img
@@ -109,3 +111,21 @@ fastqc:
 
 fastq_stats:
     max_reads: 500000
+
+
+#############################################################################
+# MultiQC aggregates the FastQC and cutadapt reports in a single HTML file
+#
+# :Parameters:
+#
+# - do: if unchecked, this rule is ignored
+# - options: any options recognised by multiqc
+# - input_directory: where to look for the reports
+# - modules: the multiqc modules to use (space separated)
+# - config_file: an optional multiqc configuration file
+multiqc:
+    do: true
+    options: -p -f
+    input_directory: '.'
+    modules: fastqc cutadapt
+    config_file:

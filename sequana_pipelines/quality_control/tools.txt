@@ -6,3 +6,4 @@
 - cutadapt
 - atropos
 - graphviz
+- multiqc

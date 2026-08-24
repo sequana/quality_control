@@ -10,6 +10,7 @@ dependencies:
 - fastqc
 - sambamba
 - graphviz
+- multiqc
 - pulp>=2.8
 - pip:
   - sequana

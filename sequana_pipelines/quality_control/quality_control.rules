@@ -36,8 +36,12 @@ def fastq_stats_output(directory):
     }
 
 
-def compute_fastq_stats(fastqs, output, max_reads):
-    """Compute the sequana statistics and plots of each input FastQ file"""
+def compute_fastq_stats(fastqs, output, max_reads, logfile):
+    """Compute the sequana statistics and plots of each input FastQ file
+
+    The progress is written in *logfile* as we go: the pipeline monitor follows
+    the modification time of the log files to report the elapsed time.
+    """
     import shutil
     from pathlib import Path
 
@@ -45,7 +49,14 @@ def compute_fastq_stats(fastqs, output, max_reads):
     from sequana import FastQC, sequana_data
 
     pylab.ioff()
+
+    # start from a fresh log, otherwise a rerun appends to the previous messages
+    with open(logfile, "w"):
+        pass
+
     for filename, json_file, gc_file, boxplot_file in zip(fastqs, output.json, output.gc, output.boxplot):
+        with open(logfile, "a") as fout:
+            fout.write(f"Computing the statistics of {filename}\n")
         fastq = FastQC(filename, max_sample=max_reads)
         if len(fastq.fastq) != 0:
             pylab.clf()
@@ -85,6 +96,14 @@ if manager.config.trimming.do:
     expected_output += expand(__fastq_stats_trimmed__output["json"], sample=manager.samples)
     if manager.config.fastqc.do_after_adapter_removal:
         expected_output += expand("{sample}/fastqc_trimmed/fastqc.done", sample=manager.samples)
+
+# multiqc aggregates all the reports, hence it must be the last rule to run
+__multiqc__input = list(expected_output)
+if manager.config.trimming.do:
+    __multiqc__input += expand("{sample}/logs/cutadapt/cutadapt.txt", sample=manager.samples)
+
+if config['multiqc']['do']:
+    expected_output += ["multiqc/multiqc_report.html"]
 
 
 rule pipeline:
@@ -134,8 +153,10 @@ rule fastq_stat_samples:
         boxplot=__fastq_stats_samples__output["boxplot"]
     params:
         max_reads=config['fastq_stats']['max_reads']
+    log:
+        "logs/{sample}/fastq_stats_samples.log"
     run:
-        compute_fastq_stats(input.fastq, output, params.max_reads)
+        compute_fastq_stats(input.fastq, output, params.max_reads, log[0])
 
 
 
@@ -225,9 +246,14 @@ if manager.config.bwa_mem_phix.do:
             stats=__bwa_bam_to_fastq__stats_output
         params:
             wkdir = __bwa_bam_to_fastq__wkdir
+        log:
+            "logs/{sample}/bwa_bam_to_fastq.log"
         run:
             # save some stats for later
             from sequana.tools import StatsBAM2Mapped
+
+            with open(log[0], "w") as fout:
+                fout.write(f"Extracting the mapped and unmapped reads of {input.bam}\n")
             stats = StatsBAM2Mapped(input["bam"], wkdir=params.wkdir)
             stats.to_json(output["stats"])
 
@@ -279,8 +305,10 @@ if manager.config.bwa_mem_phix.do:
             boxplot=__fastq_stats_phix__output["boxplot"]
         params:
             max_reads=config['fastq_stats']['max_reads']
+        log:
+            "logs/{sample}/fastq_stats_phix.log"
         run:
-            compute_fastq_stats(input.fastq, output, params.max_reads)
+            compute_fastq_stats(input.fastq, output, params.max_reads, log[0])
 
 
 
@@ -296,7 +324,7 @@ if manager.config['trimming']['do']:
     rev = manager.config.cutadapt.rev
 
     if adapter_tool in ["cutadapt", "atropos"]:
-        adapter_tool = "cutadapt"
+        executable = config['cutadapt']['tool_choice']
         if manager.config.bwa_mem_phix.do:
             __cutadapt__input_fastq = [x for x in __bwa_bam_to_fastq__fastq_output_gz
                                        if "unmapped" in x]
@@ -315,93 +343,107 @@ if manager.config['trimming']['do']:
                 __cutadapt__output = [
                     "{sample}/cutadapt/{sample}_R1_.cutadapt.fastq.gz"]
 
-        rule cutadapt:
-            input:
-                fastq = __cutadapt__input_fastq
-            output:
-                fastq = __cutadapt__output
-            params:
-                fwd = manager.config.cutadapt.fwd,
-                rev = manager.config.cutadapt.rev,
-                m = config['cutadapt']['m'],   # cutoff
-                quality = config['cutadapt']['quality'],
-                kwargs = manager.config.cutadapt.options,
-                mode = manager.config.cutadapt.mode,
-                wkdir = "{sample}/cutadapt",
-                sample = "{sample}",
-            threads:
-                config['cutadapt']['threads']
-            log: "{sample}/logs/cutadapt/cutadapt.txt"
-            run:
-                executable = config['cutadapt']['tool_choice'] # could be cutadapt or atropos
+        # the adapters are optional. A dummy one is used when none is provided so
+        # that the quality and length trimming is still performed
+        mode = manager.config.cutadapt.mode
+        adapter_options = f" -{mode} {fwd if fwd else 'XXXX'} "
+        if manager.paired:
+            adapter_options += f" -{mode.upper()} {rev if rev else 'XXXX'} "
 
-                # Fill the fwd and revcomp variables depending on the config file
-                fwd = params.fwd
-                revcomp = params.rev
+        trimming_options = "{} -m {} -q {} {}".format(
+            adapter_options,
+            config['cutadapt']['m'],
+            config['cutadapt']['quality'],
+            manager.config.cutadapt.options)
 
-                # For atropos, output must be txt AND json for the module to work.
-                #
-                # Paired data
-                if len(input.fastq) == 2:
-                    if executable == "atropos":
-                        cmd = "%s trim" % executable
-                        cmd += " -pe1 {input.fastq[0]} -pe2 {input.fastq[1]} "
-                        # atropos requires at least 2 threads
-                        if int(threads) > 1:
-                            cmd += " -T {threads} "
-                        cmd += " --process-timeout 600 "
-                        logpath = log[0].replace(".txt", "")
-                        cmd += " --report-formats json txt --report-file %s" % logpath
-                    else:
-                        cmd = "{}".format(executable)
-                    mode2 = params.mode.upper()
-
-                    if fwd:
-                        cmd += " -{params.mode} %s " % fwd
-                    else:
-                        cmd += " -{params.mode} XXXX "
-
-                    if revcomp:
-                        cmd += " -%s %s " % (mode2, revcomp)
-                    else:
-                        cmd += " -%s XXXX " % mode2
-
-                    cmd += " -m {params.m} -q {params.quality} "
-                    # -o  is common to atropos and cutadapt for the output R1 and -p for
-                    # R2
-                    cmd += " {params.kwargs} -o {output.fastq[0]} -p {output.fastq[1]}"
-
-                    # input of cutdapt must be at the end. earlier version handled
-                    # mixing of optional arguments and positional argument but not
-                    # latest version. In any case, it is safer to do it correctly
-                    # (changes sequana 0.8)
-                    if executable == "cutadapt":
-                        cmd += " {input.fastq[0]} {input.fastq[1]} "
-                    cmd += "> {log}"
-                    shell(cmd)
-                else:
-                    if executable == "atropos":
-                        cmd = "%s trim -se {input.fastq[0]}  " % executable
-                        # atropos requires at least 2 threads
-
-                        if int(threads) > 1:
-                            cmd += " -T {threads} "
-                        cmd += " --process-timeout 600 "
-                        logpath = log[0].replace(".txt", "")
-                        cmd += " --report-formats json txt --report-file %s" % logpath
-                    else:
-                        cmd = "%s" % executable
-
-                    if fwd:
-                        cmd += "    -{params.mode} %s " % fwd
-                    else:
-                        cmd += "    -{params.mode} XXXX "
-                    cmd += " -m {params.m} -q {params.quality} "
-                    cmd += " {params.kwargs} -o {output.fastq[0]}"
-                    if executable == "cutadapt":
-                        cmd += " {input.fastq[0]} "
-                    cmd += " > {log}"
-                    shell(cmd)
+        if executable == "cutadapt":
+            if manager.paired:
+                rule cutadapt:
+                    input:
+                        fastq=__cutadapt__input_fastq
+                    output:
+                        fastq=__cutadapt__output
+                    params:
+                        options=trimming_options
+                    threads:
+                        config['cutadapt']['threads']
+                    log:
+                        "{sample}/logs/cutadapt/cutadapt.txt"
+                    container:
+                        config['apptainers']['cutadapt']
+                    shell:
+                        """
+                        cutadapt -j {threads} {params.options} \
+                            -o {output.fastq[0]} -p {output.fastq[1]} \
+                            {input.fastq[0]} {input.fastq[1]} > {log} 2>&1
+                        """
+            else:
+                rule cutadapt:
+                    input:
+                        fastq=__cutadapt__input_fastq
+                    output:
+                        fastq=__cutadapt__output
+                    params:
+                        options=trimming_options
+                    threads:
+                        config['cutadapt']['threads']
+                    log:
+                        "{sample}/logs/cutadapt/cutadapt.txt"
+                    container:
+                        config['apptainers']['cutadapt']
+                    shell:
+                        """
+                        cutadapt -j {threads} {params.options} \
+                            -o {output.fastq[0]} {input.fastq[0]} > {log} 2>&1
+                        """
+        else:
+            # atropos has no container; it must be available in the environment.
+            # Its own report (cutadapt.txt) is the one read by the HTML report,
+            # hence the separate log file for the standard output
+            if manager.paired:
+                rule atropos:
+                    input:
+                        fastq=__cutadapt__input_fastq
+                    output:
+                        fastq=__cutadapt__output
+                    params:
+                        options=trimming_options,
+                        report="{sample}/logs/cutadapt/cutadapt"
+                    threads:
+                        config['cutadapt']['threads']
+                    log:
+                        stdout="{sample}/logs/cutadapt/atropos.log",
+                        report="{sample}/logs/cutadapt/cutadapt.txt"
+                    shell:
+                        """
+                        atropos trim -pe1 {input.fastq[0]} -pe2 {input.fastq[1]} \
+                            -T {threads} --process-timeout 600 \
+                            --report-formats json txt --report-file {params.report} \
+                            {params.options} \
+                            -o {output.fastq[0]} -p {output.fastq[1]} > {log.stdout} 2>&1
+                        """
+            else:
+                rule atropos:
+                    input:
+                        fastq=__cutadapt__input_fastq
+                    output:
+                        fastq=__cutadapt__output
+                    params:
+                        options=trimming_options,
+                        report="{sample}/logs/cutadapt/cutadapt"
+                    threads:
+                        config['cutadapt']['threads']
+                    log:
+                        stdout="{sample}/logs/cutadapt/atropos.log",
+                        report="{sample}/logs/cutadapt/cutadapt.txt"
+                    shell:
+                        """
+                        atropos trim -se {input.fastq[0]} \
+                            -T {threads} --process-timeout 600 \
+                            --report-formats json txt --report-file {params.report} \
+                            {params.options} \
+                            -o {output.fastq[0]} > {log.stdout} 2>&1
+                        """
 
     else:
         raise ValueError(f"trimming must be one of {valid_trimmer}")
@@ -415,8 +457,10 @@ if manager.config['trimming']['do']:
             boxplot=__fastq_stats_trimmed__output["boxplot"]
         params:
             max_reads=config['fastq_stats']['max_reads']
+        log:
+            "logs/{sample}/fastq_stats_trimmed.log"
         run:
-            compute_fastq_stats(input.fastq, output, params.max_reads)
+            compute_fastq_stats(input.fastq, output, params.max_reads, log[0])
 
 
     # Now we can perform again a FastQC and FastQ stats
@@ -437,6 +481,27 @@ if manager.config['trimming']['do']:
             shell:
                 manager.get_shell("fastqc/run", "v1")
 
+
+
+# ============================================================ multiqc
+if config['multiqc']['do']:
+
+    rule multiqc:
+        input:
+            __multiqc__input
+        output:
+            "multiqc/multiqc_report.html"
+        params:
+            options=config['multiqc']['options'],
+            input_directory=config['multiqc']['input_directory'],
+            config_file=config['multiqc']['config_file'],
+            modules=config['multiqc']['modules']
+        log:
+            "multiqc/multiqc.log"
+        container:
+            config['apptainers']['multiqc']
+        shell:
+            manager.get_shell("multiqc/run", "v1")
 
 
 # create a json file that summarise information of your pipeline
@@ -527,7 +592,7 @@ rule dot2svg:
 
 
 # Those rules takes a couple of seconds so no need for a cluster
-localrules: rulegraph, dot2svg
+localrules: rulegraph, dot2svg, summary
 
 
 onsuccess:
@@ -576,9 +641,13 @@ onsuccess:
         fqmod = FastQStatsModule(indir, "fastqc_raw")
         sample_summary["fastq_stats_samples_json"] = json.loads(fqmod.get_stats().to_json())
 
+        multiqc_link = ''
+        if config['multiqc']['do']:
+            multiqc_link = ' | <a href="../../multiqc/multiqc_report.html">MultiQC</a>'
+
         conf.summary_sections.append({
             "name": "Stats (input data)",
-            "title_links": '<a href="fastqc_raw.html">FastQC</a>',
+            "title_links": '<a href="fastqc_raw.html">FastQC</a>' + multiqc_link,
             "anchor": "stats",
             "content": fqmod._get_stats_section()
         })

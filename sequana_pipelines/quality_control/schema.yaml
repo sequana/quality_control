@@ -54,6 +54,25 @@ mapping:
             type: bool
     
 
+    "multiqc":
+        type: map
+        mapping:
+          "do":
+            type: bool
+            default: True
+          "options":
+            type: str
+            required: False
+          "input_directory":
+            type: str
+            required: False
+          "modules":
+            type: str
+            required: False
+          "config_file":
+            type: str
+            required: False
+
     "fastq_stats":
         type: map
         mapping:
