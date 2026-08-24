@@ -49,6 +49,11 @@ def compute_fastq_stats(fastqs, output, max_reads, logfile):
     from sequana import FastQC, sequana_data
 
     pylab.ioff()
+
+    # start from a fresh log, otherwise a rerun appends to the previous messages
+    with open(logfile, "w"):
+        pass
+
     for filename, json_file, gc_file, boxplot_file in zip(fastqs, output.json, output.gc, output.boxplot):
         with open(logfile, "a") as fout:
             fout.write(f"Computing the statistics of {filename}\n")
@@ -407,14 +412,15 @@ if manager.config['trimming']['do']:
                     threads:
                         config['cutadapt']['threads']
                     log:
-                        "{sample}/logs/cutadapt/atropos.log"
+                        stdout="{sample}/logs/cutadapt/atropos.log",
+                        report="{sample}/logs/cutadapt/cutadapt.txt"
                     shell:
                         """
                         atropos trim -pe1 {input.fastq[0]} -pe2 {input.fastq[1]} \
                             -T {threads} --process-timeout 600 \
                             --report-formats json txt --report-file {params.report} \
                             {params.options} \
-                            -o {output.fastq[0]} -p {output.fastq[1]} > {log} 2>&1
+                            -o {output.fastq[0]} -p {output.fastq[1]} > {log.stdout} 2>&1
                         """
             else:
                 rule atropos:
@@ -428,14 +434,15 @@ if manager.config['trimming']['do']:
                     threads:
                         config['cutadapt']['threads']
                     log:
-                        "{sample}/logs/cutadapt/atropos.log"
+                        stdout="{sample}/logs/cutadapt/atropos.log",
+                        report="{sample}/logs/cutadapt/cutadapt.txt"
                     shell:
                         """
                         atropos trim -se {input.fastq[0]} \
                             -T {threads} --process-timeout 600 \
                             --report-formats json txt --report-file {params.report} \
                             {params.options} \
-                            -o {output.fastq[0]} > {log} 2>&1
+                            -o {output.fastq[0]} > {log.stdout} 2>&1
                         """
 
     else:

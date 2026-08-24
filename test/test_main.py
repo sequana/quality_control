@@ -74,3 +74,8 @@ def test_skip_phix_removal_and_trimming():
 
 def test_skip_fastqc():
     dryrun("--skip-fastqc-raw", "--skip-fastqc-cleaned")
+
+
+def test_atropos():
+    # atropos writes the report read by multiqc and by the HTML report
+    dryrun("--software-choice", "atropos")
